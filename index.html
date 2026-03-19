@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ThoughtStack — Your Second Brain for Exam Prep</title>
+    <meta name="description" content="ThoughtStack is a thinking analyzer for Indian exam aspirants. Brain-dump your thoughts after studying and discover patterns, contradictions, and blind spots in your thinking.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="grid-overlay"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-brand">
+            <div class="brand-icon">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                    <path d="M14 2C7.37 2 2 7.37 2 14s5.37 12 12 12 12-5.37 12-12S20.63 2 14 2z" stroke="url(#brandGrad)" stroke-width="2" fill="none"/>
+                    <path d="M9 14c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="url(#brandGrad)" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    <path d="M11 14c0-1.66 1.34-3 3-3s3 1.34 3 3" stroke="url(#brandGrad)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                    <circle cx="14" cy="14" r="1.5" fill="url(#brandGrad)"/>
+                    <path d="M14 16v6" stroke="url(#brandGrad)" stroke-width="1.5" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="brandGrad" x1="2" y1="2" x2="26" y2="26">
+                            <stop stop-color="#6C5CE7"/>
+                            <stop offset="1" stop-color="#00CEC9"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <span class="brand-name">ThoughtStack</span>
+        </div>
+        <div class="nav-tabs">
+            <button class="nav-tab active" data-view="dump" id="nav-dump">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                    <path d="M12 8v8M8 12h8" stroke-linecap="round"/>
+                </svg>
+                <span>Brain Dump</span>
+            </button>
+            <button class="nav-tab" data-view="timeline" id="nav-timeline">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2v20M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+                <span>Timeline</span>
+            </button>
+            <button class="nav-tab" data-view="patterns" id="nav-patterns">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
+                    <path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke-linecap="round"/>
+                </svg>
+                <span>Patterns</span>
+            </button>
+            <button class="nav-tab" data-view="contradictions" id="nav-contradictions">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 22h20L12 2z"/>
+                    <path d="M12 9v5M12 17v.01" stroke-linecap="round"/>
+                </svg>
+                <span>Contradictions</span>
+            </button>
+            <button class="nav-tab" data-view="blindspots" id="nav-blindspots">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                <span>Blind Spots</span>
+            </button>
+            <button class="nav-tab" data-view="insights" id="nav-insights">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 20V10M12 20V4M6 20v-6"/>
+                </svg>
+                <span>Insights</span>
+            </button>
+        </div>
+        <div class="nav-actions">
+            <button class="theme-toggle-btn" id="theme-toggle" aria-label="Toggle Theme">
+                <div class="theme-toggle-icon">
+                    <!-- Sun core -->
+                    <div class="sun-core"></div>
+                    <!-- Sun rays -->
+                    <div class="sun-rays">
+                        <span class="sun-ray"></span>
+                        <span class="sun-ray"></span>
+                        <span class="sun-ray"></span>
+                        <span class="sun-ray"></span>
+                        <span class="sun-ray"></span>
+                        <span class="sun-ray"></span>
+                        <span class="sun-ray"></span>
+                        <span class="sun-ray"></span>
+                    </div>
+                    <!-- Moon mask (crescent) -->
+                    <div class="moon-mask"></div>
+                    <!-- Stars -->
+                    <div class="toggle-stars">
+                        <span class="toggle-star"></span>
+                        <span class="toggle-star"></span>
+                        <span class="toggle-star"></span>
+                    </div>
+                </div>
+            </button>
+            <div class="exam-selector" id="exam-selector">
+                <button class="exam-btn" id="exam-btn">
+                    <span id="current-exam">JEE</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </button>
+                <div class="exam-dropdown" id="exam-dropdown">
+                    <button class="exam-option active" data-exam="JEE">🎯 JEE (Mains + Advanced)</button>
+                    <button class="exam-option" data-exam="NEET">🩺 NEET</button>
+                    <button class="exam-option" data-exam="UPSC">📜 UPSC CSE</button>
+                    <button class="exam-option" data-exam="GATE">⚙️ GATE</button>
+                    <button class="exam-option" data-exam="CAT">📊 CAT</button>
+                    <button class="exam-option" data-exam="CUSTOM">✏️ Custom</button>
+                </div>
+            </div>
+            <div class="nav-auth" id="nav-auth">
+                <button class="btn btn-auth" id="btn-login" onclick="openAuthModal()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25h-10.36v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53h-3.69v2.85c1.81 3.59 5.5 6.05 9.79 6.05z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09v-2.85h-3.69c-.73 1.46-1.15 3.1-1.15 4.94s.42 3.48 1.15 4.94k5.84-2.85z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15c-1.91-1.78-4.41-2.89-7.36-2.89-4.29 0-7.98 2.46-9.79 6.05l3.69 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    Sign In
+                </button>
+                <div class="user-avatar hidden" id="user-avatar" onclick="openAccountModal()">
+                    <img src="" alt="User" id="user-photo">
+                </div>
+            </div>
+            <button class="streak-badge" id="streak-badge" title="Current Streak">
+                <span class="streak-fire">🔥</span>
+                <span class="streak-count" id="streak-count">0</span>
+            </button>
+            <button class="pro-badge" id="pro-badge" onclick="openUpgradeModal()" title="Upgrade to Pro">
+                <span id="pro-badge-label">FREE</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+
+        <!-- Brain Dump View -->
+        <section class="view active" id="view-dump">
+            <div class="dump-container">
+                <div class="dump-header">
+                    <div class="dump-title-area">
+                        <h1>Brain Dump</h1>
+                        <p class="dump-subtitle">Just finished studying? Think out loud. No structure needed.</p>
+                    </div>
+                    <div class="dump-date" id="dump-date"></div>
+                </div>
+
+                <div class="dump-editor-wrap">
+                    <!-- Subject Selector -->
+                    <div class="subject-selector" id="subject-selector">
+                        <span class="subject-selector-label">What did you study?</span>
+                        <div class="subject-pills" id="subject-pills">
+                            <!-- Dynamically populated by JS -->
+                        </div>
+                    </div>
+                    <div class="editor-container">
+                        <textarea class="dump-editor" id="dump-editor" placeholder="What did you study today? What clicked? What confused you? What are you still unsure about?&#10;&#10;Just write freely — we'll figure out the rest."></textarea>
+                        <div class="editor-footer">
+                            <div class="editor-stats">
+                                <span id="word-count">0 words</span>
+                            </div>
+                            <div class="editor-actions">
+                                <span class="save-hint">Ctrl+Enter</span>
+                                <button class="btn btn-primary" id="save-dump">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M5 12l5 5L20 7"/>
+                                    </svg>
+                                    Stack It
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auto-extracted analysis after dump -->
+                <div class="quick-insights hidden" id="quick-insights">
+                    <h3>🧠 Here's what we picked up</h3>
+                    <div class="insights-grid" id="insights-grid"></div>
+                </div>
+
+                <!-- Today's earlier dumps -->
+                <div class="today-dumps hidden" id="today-dumps">
+                    <h3>📝 Earlier today</h3>
+                    <div class="today-dumps-list" id="today-dumps-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Timeline View -->
+        <section class="view" id="view-timeline">
+            <div class="timeline-container">
+                <div class="view-header">
+                    <h1>Thought Timeline</h1>
+                    <p>Your thinking journey, chronologically mapped</p>
+                    <div class="timeline-filters">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="high-confidence">High Confidence</button>
+                        <button class="filter-btn" data-filter="confused">Confused</button>
+                        <button class="filter-btn" data-filter="contradiction">Has Contradictions</button>
+                    </div>
+                </div>
+                <div class="timeline-track" id="timeline-track">
+                    <div class="empty-state" id="timeline-empty">
+                        <div class="empty-icon">📝</div>
+                        <h3>No thoughts yet</h3>
+                        <p>Start your first brain dump to see your thinking timeline grow.</p>
+                        <button class="btn btn-secondary" onclick="switchView('dump')">Start Dumping →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Patterns View -->
+        <section class="view" id="view-patterns">
+            <div class="patterns-container">
+                <div class="view-header">
+                    <h1>Pattern Detector</h1>
+                    <p>Recurring themes, concept clusters, and thinking habits</p>
+                </div>
+                <div class="patterns-content" id="patterns-content">
+                    <div class="pattern-section">
+                        <h2>🔗 Concept Clusters</h2>
+                        <p class="section-desc">Topics that frequently appear together in your thinking</p>
+                        <div class="concept-cloud" id="concept-cloud"></div>
+                    </div>
+                    <div class="pattern-section">
+                        <h2>📈 Thinking Trends</h2>
+                        <p class="section-desc">How your focus shifts across subjects over time</p>
+                        <div class="trends-chart" id="trends-chart"></div>
+                    </div>
+                    <div class="pattern-section">
+                        <h2>🧩 Recurring Themes</h2>
+                        <p class="section-desc">Concepts you keep returning to</p>
+                        <div class="themes-list" id="themes-list"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contradictions View -->
+        <section class="view" id="view-contradictions">
+            <div class="contradictions-container">
+                <div class="view-header">
+                    <h1>Contradiction Engine</h1>
+                    <p>The uncomfortable gap between what you say and what your data shows</p>
+                </div>
+                <div class="contradiction-feed" id="contradiction-feed">
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <h3>Not enough data yet</h3>
+                        <p>The engine needs at least a few brain dumps across different days to find patterns. Keep writing.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Blind Spots View -->
+        <section class="view" id="view-blindspots">
+            <div class="blindspots-container">
+                <div class="view-header">
+                    <h1>Blind Spot Map</h1>
+                    <p>Topics you haven't thought about enough (based on your exam syllabus)</p>
+                </div>
+                <div class="blindspots-content" id="blindspots-content">
+                    <div class="syllabus-heatmap" id="syllabus-heatmap"></div>
+                    <div class="blindspot-summary" id="blindspot-summary">
+                        <div class="summary-card danger">
+                            <div class="summary-icon">🚨</div>
+                            <div class="summary-info">
+                                <h4>Critical Gaps</h4>
+                                <span id="critical-gaps-count">0 topics</span>
+                            </div>
+                        </div>
+                        <div class="summary-card warning">
+                            <div class="summary-icon">⚠️</div>
+                            <div class="summary-info">
+                                <h4>Weak Areas</h4>
+                                <span id="weak-areas-count">0 topics</span>
+                            </div>
+                        </div>
+                        <div class="summary-card success">
+                            <div class="summary-icon">✅</div>
+                            <div class="summary-info">
+                                <h4>Well Covered</h4>
+                                <span id="covered-count">0 topics</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Insights View -->
+        <section class="view" id="view-insights">
+            <div class="insights-container">
+                <div class="view-header">
+                    <h1>Thinking Insights</h1>
+                    <p>Analytics on how you think, not just what you study</p>
+                </div>
+
+                <!-- Weekly Honest Review Trigger -->
+                <div class="weekly-review-trigger" id="weekly-review-trigger">
+                    <div class="review-trigger-left">
+                        <span class="review-trigger-icon">📋</span>
+                        <div>
+                            <h3>Weekly Honest Review</h3>
+                            <p id="review-trigger-subtitle">A blunt look at your last 7 days. No sugarcoating.</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="generate-review-btn" onclick="openWeeklyReview()">
+                        Generate Review
+                    </button>
+                </div>
+                <div class="insights-dashboard" id="insights-dashboard">
+                    <div class="insight-row">
+                        <div class="insight-card large">
+                            <div class="card-header">
+                                <h3>🧠 Thinking Score</h3>
+                                <span class="badge">Updated Live</span>
+                            </div>
+                            <div class="thinking-score-display">
+                                <div class="score-ring" id="score-ring">
+                                    <svg viewBox="0 0 120 120">
+                                        <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/>
+                                        <circle cx="60" cy="60" r="52" fill="none" stroke="url(#scoreGrad)" stroke-width="8" 
+                                            stroke-dasharray="327" stroke-dashoffset="327" stroke-linecap="round" id="score-circle"/>
+                                        <defs>
+                                            <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="#6C5CE7"/>
+                                                <stop offset="100%" stop-color="#00CEC9"/>
+                                            </linearGradient>
+                                        </defs>
+                                    </svg>
+                                    <div class="score-value" id="score-value">0</div>
+                                </div>
+                                <div class="score-breakdown">
+                                    <div class="score-factor">
+                                        <span class="factor-name">Depth</span>
+                                        <div class="factor-bar"><div class="factor-fill" id="depth-fill" style="width:0%"></div></div>
+                                    </div>
+                                    <div class="score-factor">
+                                        <span class="factor-name">Breadth</span>
+                                        <div class="factor-bar"><div class="factor-fill" id="breadth-fill" style="width:0%"></div></div>
+                                    </div>
+                                    <div class="score-factor">
+                                        <span class="factor-name">Consistency</span>
+                                        <div class="factor-bar"><div class="factor-fill" id="consistency-fill" style="width:0%"></div></div>
+                                    </div>
+                                    <div class="score-factor">
+                                        <span class="factor-name">Critical Thinking</span>
+                                        <div class="factor-bar"><div class="factor-fill" id="critical-fill" style="width:0%"></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="card-header">
+                                <h3>📊 Activity</h3>
+                            </div>
+                            <div class="activity-heatmap" id="activity-heatmap"></div>
+                        </div>
+                    </div>
+                    <div class="insight-row">
+                        <div class="insight-card">
+                            <div class="card-header">
+                                <h3>⏰ Best Thinking Time</h3>
+                            </div>
+                            <div class="best-time" id="best-time">
+                                <div class="time-display">--:--</div>
+                                <p>Not enough data yet</p>
+                            </div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="card-header">
+                                <h3>📝 Dump Stats</h3>
+                            </div>
+                            <div class="dump-stats" id="dump-stats">
+                                <div class="stat-item">
+                                    <span class="stat-value" id="total-dumps">0</span>
+                                    <span class="stat-label">Total Dumps</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="total-words">0</span>
+                                    <span class="stat-label">Words Written</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="avg-confidence">–</span>
+                                    <span class="stat-label">Avg Confidence</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="card-header">
+                                <h3>🎯 Subject Distribution</h3>
+                            </div>
+                            <div class="subject-dist" id="subject-dist"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decision Clarifier (Pro) -->
+                <div class="decision-clarifier-section" id="decision-clarifier-section">
+                    <div class="dc-header">
+                        <div class="dc-header-left">
+                            <span class="dc-icon">🔮</span>
+                            <div>
+                                <h3>Decision Clarifier <span class="pro-tag">PRO</span></h3>
+                                <p>Got a big decision? Dump your thinking and get 3 sharp questions.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dc-body" id="dc-body">
+                        <textarea class="dc-textarea" id="dc-textarea" placeholder="What decision are you wrestling with? Write everything — the options, the fears, the pressure, the confusion. The messier the better."></textarea>
+                        <div class="dc-footer">
+                            <span class="dc-word-count" id="dc-word-count">0 words</span>
+                            <button class="btn btn-primary" id="dc-clarify-btn" onclick="runDecisionClarifier()">
+                                🔮 Clarify My Thinking
+                            </button>
+                        </div>
+                        <div class="dc-results hidden" id="dc-results"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Thought Detail Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="thought-modal">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <div class="modal-content" id="modal-content"></div>
+        </div>
+    </div>
+
+    <!-- Weekly Honest Review Overlay -->
+    <div class="review-overlay hidden" id="review-overlay">
+        <div class="review-container">
+            <div class="review-header">
+                <div class="review-header-left">
+                    <span class="review-header-icon">📋</span>
+                    <div>
+                        <h1>Weekly Honest Review</h1>
+                        <p id="review-period"></p>
+                    </div>
+                </div>
+                <button class="review-close" onclick="closeWeeklyReview()">&times;</button>
+            </div>
+            <div class="review-body" id="review-body">
+                <!-- Generated review content goes here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Upgrade Modal -->
+    <div class="upgrade-overlay hidden" id="upgrade-overlay">
+        <div class="upgrade-modal">
+            <button class="upgrade-close" onclick="closeUpgradeModal()">&times;</button>
+            <div class="upgrade-header">
+                <h2>Upgrade to <span class="pro-gradient">ThoughtStack Pro</span></h2>
+                <p>Stop guessing. Start knowing.</p>
+            </div>
+            <div class="upgrade-comparison">
+                <div class="tier-card tier-free">
+                    <div class="tier-card-header">
+                        <h3>Free</h3>
+                        <div class="tier-price">₹0<span>/month</span></div>
+                    </div>
+                    <ul class="tier-features">
+                        <li>✅ Brain Dump with auto-analysis</li>
+                        <li>✅ Thought Timeline</li>
+                        <li>✅ Basic Pattern Detection</li>
+                        <li>✅ Blind Spots Detection</li>
+                        <li>✅ 30 days of history</li>
+                        <li class="tier-locked">🔒 Weekly Honest Review</li>
+                        <li class="tier-locked">🔒 Full Contradiction Engine</li>
+                        <li class="tier-locked">🔒 Decision Clarifier</li>
+                        <li class="tier-locked">🔒 Unlimited history</li>
+                    </ul>
+                    <div class="tier-current">Current Plan</div>
+                </div>
+                <div class="tier-card tier-pro">
+                    <div class="tier-card-badge">RECOMMENDED</div>
+                    <div class="tier-card-header">
+                        <h3>Pro</h3>
+                        <div class="tier-price">₹99<span>/month</span></div>
+                    </div>
+                    <ul class="tier-features">
+                        <li>✅ Everything in Free</li>
+                        <li>⭐ Weekly Honest Review</li>
+                        <li>⭐ Full Contradiction Engine</li>
+                        <li>⭐ Decision Clarifier</li>
+                        <li>⭐ Unlimited history</li>
+                        <li>⭐ Priority feature access</li>
+                    </ul>
+                    <button class="btn btn-upgrade" id="btn-upgrade" onclick="handleUpgrade()">Start Pro — ₹99/mo</button>
+                </div>
+            </div>
+            <p class="upgrade-note">Demo mode: Pro activates instantly (no payment in MVP)</p>
+        </div>
+    </div>
+
+    <!-- Global Loading Overlay -->
+    <div class="app-loading-overlay" id="app-loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div class="auth-overlay hidden" id="auth-overlay">
+        <div class="auth-modal">
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Login</button>
+                <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
+            </div>
+            
+            <div class="auth-form" id="auth-form">
+                <h2 id="auth-title">Welcome Back</h2>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="auth-email" placeholder="you@exam.com">
+                </div>
+                <div class="form-group" id="auth-password-group">
+                    <div class="form-label-flex">
+                        <label>Password</label>
+                        <a href="#" class="auth-link" id="auth-forgot-link" onclick="switchAuthTab('forgot')">Forgot?</a>
+                    </div>
+                    <input type="password" id="auth-password" placeholder="••••••••">
+                </div>
+                <button class="btn btn-primary btn-full" id="btn-auth-submit" onclick="handleAuthSubmit()">Login</button>
+                
+                <div class="auth-extra hidden" id="auth-extra-text">
+                    <a href="#" class="auth-link" onclick="switchAuthTab('login')">← Back to Login</a>
+                </div>
+                
+                <div id="auth-social-group">
+                    <div class="auth-divider">
+                        <span>or continue with</span>
+                    </div>
+                    
+                    <button class="btn btn-google-full" onclick="handleGoogleSignIn()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25h-10.36v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53h-3.69v2.85c1.81 3.59 5.5 6.05 9.79 6.05z" fill="#34A853"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09v-2.85h-3.69c-.73 1.46-1.15 3.1-1.15 4.94s.42 3.48 1.15 4.94k5.84-2.85z" fill="#FBBC05"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15c-1.91-1.78-4.41-2.89-7.36-2.89-4.29 0-7.98 2.46-9.79 6.05l3.69 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                        </svg>
+                        Google
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Verification Overlay -->
+    <div class="verification-overlay hidden" id="verification-overlay">
+        <div class="verification-card">
+            <div class="verification-icon">📧</div>
+            <h2>Check your email</h2>
+            <p>We've sent a verification link to <strong id="verification-email-display">your email</strong>.</p>
+            <p class="verification-sub">Please verify your email to unlock your ThoughtStack.</p>
+            <div class="verification-actions">
+                <button class="btn btn-primary" onclick="window.location.reload()">I've Verified</button>
+                <button class="btn btn-ghost" onclick="resendVerification()">Resend verification email</button>
+            </div>
+            <button class="verification-logout" onclick="handleSignOut()">Use another account</button>
+        </div>
+    </div>
+
+    <!-- Account Modal -->
+    <div class="auth-overlay hidden" id="account-overlay">
+        <div class="auth-modal" style="max-width: 480px;">
+            <button class="auth-close" onclick="closeAccountModal()">&times;</button>
+            <div class="account-header">
+                <img src="" alt="Profile" id="account-photo" class="account-photo">
+                <div class="account-info">
+                    <h2 id="account-name-display">Name</h2>
+                    <p id="account-email-display">email@exam.com</p>
+                </div>
+            </div>
+            
+            <div class="auth-form" style="margin-top:24px;">
+                <div class="form-group">
+                    <label>Display Name</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="account-name-input" placeholder="Your Name">
+                        <button class="btn btn-primary" onclick="updateAccountName()">Save</button>
+                    </div>
+                </div>
+                
+                <div class="account-actions">
+                    <button class="btn btn-ghost account-btn-full" onclick="sendAccountPasswordReset()">
+                        Change Password (Send Email)
+                    </button>
+                    <button class="btn btn-ghost account-btn-full sign-out-btn" onclick="handleSignOut()">
+                        Sign Out
+                    </button>
+                    <div class="auth-divider">
+                        <span>Danger Zone</span>
+                    </div>
+                    <button class="btn account-btn-full delete-account-btn" onclick="deleteUserAccount()">
+                        Delete Account Permanently
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="firebase.js"></script>
+    <script src="data.js"></script>
+    <script src="tier.js"></script>
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
