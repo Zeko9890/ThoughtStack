@@ -3400,6 +3400,70 @@ body {
 }
 
 /* ===========================
+   Account Modal
+   =========================== */
+
+.account-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.account-photo {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--accent-primary);
+    box-shadow: var(--shadow-glow);
+}
+
+.account-info h2 {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.account-info p {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.account-actions {
+    margin-top: 24px;
+}
+
+.account-btn-full {
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.sign-out-btn {
+    color: var(--warning);
+    border-color: rgba(254, 202, 87, 0.3);
+}
+
+.sign-out-btn:hover {
+    background: rgba(254, 202, 87, 0.1);
+    border-color: rgba(254, 202, 87, 0.5);
+}
+
+.delete-account-btn {
+    background: rgba(255, 107, 107, 0.1);
+    color: var(--danger);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.delete-account-btn:hover {
+    background: rgba(255, 107, 107, 0.2);
+    border-color: rgba(255, 107, 107, 0.5);
+}
+
+/* ===========================
    Upgrade Modal
    =========================== */
 

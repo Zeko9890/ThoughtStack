@@ -183,6 +183,114 @@ async function resendVerification() {
     }
 }
 
+// ---- Account Management ----
+
+function openAccountModal() {
+    if (!window.currentUser) return;
+    const overlay = document.getElementById('account-overlay');
+    const photo = document.getElementById('account-photo');
+    const nameDisplay = document.getElementById('account-name-display');
+    const emailDisplay = document.getElementById('account-email-display');
+    const nameInput = document.getElementById('account-name-input');
+    
+    photo.src = window.currentUser.photoURL || `https://ui-avatars.com/api/?name=${window.currentUser.email}&background=6c5ce7&color=fff`;
+    nameDisplay.textContent = window.currentUser.displayName || window.currentUser.email.split('@')[0];
+    emailDisplay.textContent = window.currentUser.email;
+    nameInput.value = window.currentUser.displayName || '';
+    
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeAccountModal() {
+    const overlay = document.getElementById('account-overlay');
+    overlay.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+async function updateAccountName() {
+    if (!window.currentUser) return;
+    const newName = document.getElementById('account-name-input').value.trim();
+    if (!newName) return showToast('⚠️', 'Name cannot be empty.');
+    
+    try {
+        const { updateProfile } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
+        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+        
+        // Update Auth Profile
+        await updateProfile(window.currentUser, { displayName: newName });
+        
+        // Update Firestore Doc
+        const userRef = doc(window.firebaseDB, "users", window.currentUser.uid);
+        await updateDoc(userRef, { name: newName });
+        
+        // Update UI
+        document.getElementById('account-name-display').textContent = newName;
+        document.getElementById('user-avatar').title = `Logged in as ${newName}`;
+        
+        showToast('✅', 'Profile updated successfully!');
+    } catch (err) {
+        console.error("Failed to update profile:", err);
+        showToast('❌', 'Failed to update profile.');
+    }
+}
+
+async function sendAccountPasswordReset() {
+    if (!window.currentUser || !window.currentUser.email) return;
+    try {
+        const { sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
+        await sendPasswordResetEmail(window.firebaseAuth, window.currentUser.email);
+        showToast('📧', 'Password reset email sent!');
+    } catch (err) {
+        console.error("Failed to send reset email:", err);
+        showToast('❌', 'Could not send reset email.');
+    }
+}
+
+async function deleteUserAccount() {
+    if (!window.currentUser) return;
+    
+    const confirmation = confirm("⚠️ DANGER ZONE ⚠️\n\nAre you absolutely sure you want to permanently delete your account?\n\nThis will instantly delete ALL your Brain Dumps, decision models, and your user profile forever. This action CANNOT be undone.");
+    
+    if (!confirmation) return;
+    
+    try {
+        const { deleteUser } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
+        const { doc, deleteDoc, collection, getDocs, query } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+        
+        const uid = window.currentUser.uid;
+        
+        showToast('⏳', 'Deleting your data... Please do not close the window.');
+        
+        // 1. Delete all thoughts
+        const thoughtsQuery = query(collection(window.firebaseDB, `users/${uid}/thoughts`));
+        const snapshots = await getDocs(thoughtsQuery);
+        const deletionPromises = [];
+        snapshots.forEach(document => {
+            deletionPromises.push(deleteDoc(document.ref));
+        });
+        await Promise.all(deletionPromises);
+        
+        // 2. Delete user profile doc
+        const userRef = doc(window.firebaseDB, "users", uid);
+        await deleteDoc(userRef);
+        
+        // 3. Delete Auth User
+        await deleteUser(window.currentUser);
+        
+        closeAccountModal();
+        showToast('👋', 'Account deleted completely. Goodbye!');
+        // UI will redirect via onAuthStateChanged automatically
+    } catch (err) {
+        console.error("Delete account error:", err);
+        if (err.code === 'auth/requires-recent-login') {
+            showToast('⚠️', 'For security, please sign out, log back in, and try deleting again.');
+        } else {
+            showToast('❌', 'Failed to delete account. You might need to sign in again.');
+        }
+    }
+}
+
 // ---- Firebase Sync & Profile Management ----
 
 async function initFirebaseSync() {
@@ -237,6 +345,7 @@ async function initFirebaseSync() {
             }
 
             // Sync User Profile in Firestore
+            let needsOnboarding = false;
             try {
                 const userRef = doc(window.firebaseDB, "users", user.uid);
                 const userSnap = await getDoc(userRef);
@@ -249,13 +358,27 @@ async function initFirebaseSync() {
                         photoURL: user.photoURL || null,
                         createdAt: serverTimestamp(),
                         lastLoginAt: serverTimestamp(),
-                        examType: null
+                        examType: null,
+                        targetYear: null,
+                        dailyStudyGoal: null
                     });
+                    needsOnboarding = true;
                 } else {
+                    const userData = userSnap.data();
+                    if (!userData.examType) {
+                        needsOnboarding = true;
+                    }
                     await setDoc(userRef, { lastLoginAt: serverTimestamp() }, { merge: true });
                 }
             } catch (err) {
                 console.error("Firestore sync error:", err);
+            }
+
+            if (needsOnboarding) {
+                document.getElementById('onboarding-overlay').classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                appLoadingOverlay.classList.add('hidden');
+                return; // Stop loading the dashboard until onboarding is complete
             }
 
             // Sync thoughts and fully load app
@@ -276,6 +399,57 @@ async function initFirebaseSync() {
             appLoadingOverlay.classList.add('hidden'); // Ready to show auth screen
         }
     });
+}
+
+async function completeOnboarding() {
+    if (!window.currentUser) return;
+    
+    const exam = document.getElementById('onboard-exam').value;
+    const year = document.getElementById('onboard-year').value;
+    const hours = document.getElementById('onboard-hours').value;
+
+    if (!year || !hours) {
+        showToast('⚠️', 'Please fill in your target year and study goal.');
+        return;
+    }
+
+    try {
+        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+        const userRef = doc(window.firebaseDB, "users", window.currentUser.uid);
+        
+        await updateDoc(userRef, {
+            examType: exam,
+            targetYear: parseInt(year),
+            dailyStudyGoal: parseInt(hours)
+        });
+
+        // Hide onboarding
+        document.getElementById('onboarding-overlay').classList.add('hidden');
+        document.body.style.overflow = '';
+        
+        showToast('✅', 'Profile configured successfully! Welcome aboard.');
+
+        // Finish app prep that was paused
+        const appLoadingOverlay = document.getElementById('app-loading-overlay');
+        appLoadingOverlay.classList.remove('hidden');
+        
+        await engine.syncWithFirestore(window.currentUser.uid);
+        renderTodaysDumps();
+        renderCurrentView();
+        
+        // Trigger initial theme switch based on exam
+        const examOptions = document.querySelectorAll('.exam-option');
+        examOptions.forEach(opt => {
+            if(opt.dataset.exam === exam) {
+                opt.click();
+            }
+        });
+        
+        appLoadingOverlay.classList.add('hidden');
+    } catch (err) {
+        console.error("Onboarding failed:", err);
+        showToast('❌', 'Could not save data. Please try again.');
+    }
 }
 
 // ---- Navigation ----
@@ -1420,3 +1594,9 @@ window.switchAuthTab = switchAuthTab;
 window.handleAuthSubmit = handleAuthSubmit;
 window.handleSignOut = handleSignOut;
 window.resendVerification = resendVerification;
+window.openAccountModal = openAccountModal;
+window.closeAccountModal = closeAccountModal;
+window.updateAccountName = updateAccountName;
+window.sendAccountPasswordReset = sendAccountPasswordReset;
+window.deleteUserAccount = deleteUserAccount;
+window.completeOnboarding = completeOnboarding;
