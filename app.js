@@ -32,7 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let authMode = 'login';
 
-// Auth mode will be handled mostly by reactive state, but keep these for direct toggles
 function openAuthModal() {
     const overlay = document.getElementById('auth-overlay');
     overlay.classList.remove('hidden');
@@ -82,63 +81,50 @@ function switchAuthTab(mode) {
     }
 }
 
-function getFriendlyAuthError(errorCode) {
+function getFriendlyAuthError(err) {
+    const errorCode = err.code || '';
     switch (errorCode) {
-        case 'auth/invalid-email':
-            return 'That email address doesn\'t look quite right.';
-        case 'auth/user-disabled':
-            return 'This account has been disabled.';
-        case 'auth/user-not-found':
-            return 'No account found with this email. Please sign up first.';
-        case 'auth/wrong-password':
-            return 'Incorrect password. Please try again.';
-        case 'auth/email-already-in-use':
-            return 'An account already exists with this email.';
-        case 'auth/weak-password':
-            return 'Your password is too weak. Make it at least 6 characters.';
-        case 'auth/invalid-credential':
-            return 'Invalid email or password.';
-        case 'auth/network-request-failed':
-            return 'Network error. Please check your internet connection.';
-        case 'auth/too-many-requests':
-            return 'Too many attempts. Please wait a moment and try again.';
-        case 'auth/popup-closed-by-user':
-            return 'Sign-in popup was closed.';
-        default:
-            return 'Something went wrong. Please try again.';
+        case 'auth/invalid-email': return 'That email address doesn\'t look quite right.';
+        case 'auth/user-disabled': return 'This account has been disabled.';
+        case 'auth/user-not-found': return 'No account found with this email. Please sign up first.';
+        case 'auth/wrong-password': return 'Incorrect password. Please try again.';
+        case 'auth/email-already-in-use': return 'An account already exists with this email.';
+        case 'auth/weak-password': return 'Your password is too weak. Make it at least 6 characters.';
+        case 'auth/invalid-credential': return 'Invalid email or password.';
+        case 'auth/network-request-failed': return 'Network error. Please check your internet connection.';
+        case 'auth/too-many-requests': return 'Too many attempts. Please wait a moment and try again.';
+        case 'auth/popup-closed-by-user': return 'Sign-in popup was closed.';
+        default: return err.message || 'Something went wrong. Please try again.';
     }
 }
 
 async function handleAuthSubmit() {
-    const email = document.getElementById('auth-email').value;
-    const password = document.getElementById('auth-password').value;
+    const emailInput = document.getElementById('auth-email');
+    const passwordInput = document.getElementById('auth-password');
+    const email = emailInput.value.trim();
+    const password = passwordInput.value.trim();
 
-    if (!email) {
-        showToast('⚠️', 'Email is required');
-        return;
-    }
+    if (!email) return showToast('⚠️', 'Email is required');
+    if (authMode !== 'forgot' && !password) return showToast('⚠️', 'Password is required');
 
-    if (authMode !== 'forgot' && !password) {
-        showToast('⚠️', 'Password is required');
-        return;
-    }
-
-    const { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
+    const loader = document.getElementById('app-loading-overlay');
+    loader.classList.remove('hidden');
 
     try {
+        const { 
+            createUserWithEmailAndPassword, 
+            signInWithEmailAndPassword, 
+            sendEmailVerification, 
+            sendPasswordResetEmail 
+        } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
+
         if (authMode === 'signup') {
             const userCredential = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
             await sendEmailVerification(userCredential.user);
-            showToast('📧', 'Verification email sent! Check your inbox.');
-            // State will handle UI overlay
+            showToast('📧', 'Verification email sent! Please check your inbox.');
         } else if (authMode === 'login') {
-            const userCredential = await signInWithEmailAndPassword(window.firebaseAuth, email, password);
-            if (!userCredential.user.emailVerified) {
-                showToast('⚠️', 'Please verify your email to continue.');
-            } else {
-                showToast('👋', 'Welcome back!');
-            }
-            // State will handle UI overlay
+            await signInWithEmailAndPassword(window.firebaseAuth, email, password);
+            showToast('👋', 'Welcome back!');
         } else if (authMode === 'forgot') {
             await sendPasswordResetEmail(window.firebaseAuth, email);
             showToast('📧', 'Password reset email sent!');
@@ -146,40 +132,70 @@ async function handleAuthSubmit() {
         }
     } catch (err) {
         console.error("Auth failed:", err);
-        showToast('❌', getFriendlyAuthError(err.code));
+        showToast('❌', getFriendlyAuthError(err));
+    } finally {
+        loader.classList.add('hidden');
     }
 }
 
 async function handleGoogleSignIn() {
     if (!window.firebaseAuth || !window.googleProvider) {
-        showToast('⚠️', 'Auth not ready. Try again in a second.');
-        return;
+        return showToast('⚠️', 'Authentication system is still loading. Try again in a second.');
     }
 
-    const { signInWithPopup } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
-    
+    const loader = document.getElementById('app-loading-overlay');
+    loader.classList.remove('hidden');
+
     try {
+        const { signInWithPopup } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
         await signInWithPopup(window.firebaseAuth, window.googleProvider);
-        showToast('👋', 'Welcome to ThoughtStack!');
-        // State will handle UI overlay
+        showToast('👋', 'Google sign-in successful!');
     } catch (err) {
-        console.error("Google Sign-In failed:", err);
-        showToast('❌', getFriendlyAuthError(err.code));
+        console.error("Google login error:", err);
+        showToast('❌', getFriendlyAuthError(err));
+    } finally {
+        loader.classList.add('hidden');
     }
 }
 
 async function handleSignOut() {
-    const { signOut } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
-    await signOut(window.firebaseAuth);
-    window.location.reload();
+    try {
+        const { signOut } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
+        await signOut(window.firebaseAuth);
+        window.location.reload();
+    } catch (err) {
+        showToast('❌', 'Error signing out.');
+    }
 }
 
 async function resendVerification() {
     const user = window.firebaseAuth.currentUser;
-    if (user) {
-        const { sendEmailVerification } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
+    if (!user) return;
+
+    try {
+        const { sendEmailVerification } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
         await sendEmailVerification(user);
-        showToast('📧', 'Verification link resent!');
+        showToast('📧', 'Verification link resent! Please check your spam folder.');
+    } catch (err) {
+        console.error("Resend failed:", err);
+        showToast('❌', 'Could not resend. Try again in a minute.');
+    }
+}
+
+async function verifyAndReload() {
+    const user = window.firebaseAuth.currentUser;
+    if (!user) return;
+    
+    try {
+        await user.reload();
+        if (user.emailVerified) {
+            showToast('✅', 'Email verified! Welcome.');
+            window.location.reload();
+        } else {
+            showToast('⏳', 'Email still not verified. Please check your inbox.');
+        }
+    } catch (err) {
+        window.location.reload();
     }
 }
 
@@ -214,8 +230,8 @@ async function updateAccountName() {
     if (!newName) return showToast('⚠️', 'Name cannot be empty.');
     
     try {
-        const { updateProfile } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
-        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+        const { updateProfile } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
+        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
         
         // Update Auth Profile
         await updateProfile(window.currentUser, { displayName: newName });
@@ -238,7 +254,7 @@ async function updateAccountName() {
 async function sendAccountPasswordReset() {
     if (!window.currentUser || !window.currentUser.email) return;
     try {
-        const { sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
+        const { sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
         await sendPasswordResetEmail(window.firebaseAuth, window.currentUser.email);
         showToast('📧', 'Password reset email sent!');
     } catch (err) {
@@ -255,8 +271,8 @@ async function deleteUserAccount() {
     if (!confirmation) return;
     
     try {
-        const { deleteUser } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
-        const { doc, deleteDoc, collection, getDocs, query } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+        const { deleteUser } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
+        const { doc, deleteDoc, collection, getDocs, query } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
         
         const uid = window.currentUser.uid;
         
@@ -299,50 +315,44 @@ async function initFirebaseSync() {
         return;
     }
 
-    const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js");
-    const { doc, getDoc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+    const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
+    const { doc, getDoc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
 
     onAuthStateChanged(window.firebaseAuth, async (user) => {
         const appLoadingOverlay = document.getElementById('app-loading-overlay');
         const authOverlay = document.getElementById('auth-overlay');
         const verificationOverlay = document.getElementById('verification-overlay');
-        
         const loginBtn = document.getElementById('btn-login');
         const userAvatar = document.getElementById('user-avatar');
         const userPhoto = document.getElementById('user-photo');
 
-        // Reset global state
-        window.currentUser = null;
-
-        if (user && !user.isAnonymous) {
-            // Check verification (Google is auto-verified usually)
+        if (user) {
+            // Check verification for Email/Password users
             const isGoogleAuth = user.providerData.some(p => p.providerId === 'google.com');
-            if (!user.emailVerified && !isGoogleAuth) {
-                // state: Logged in but UNVERIFIED
-                authOverlay.classList.add('hidden');
-                document.body.style.overflow = '';
-                
-                verificationOverlay.classList.remove('hidden');
-                document.getElementById('verification-email-display').textContent = user.email;
-                appLoadingOverlay.classList.add('hidden'); // Clear loading
-                return;
-            }
+            const isVerified = user.emailVerified || isGoogleAuth;
 
-            // state: Logged in & VERIFIED
-            window.currentUser = user;
-            authOverlay.classList.add('hidden');
-            verificationOverlay.classList.add('hidden');
-            document.body.style.overflow = '';
-
-            console.log("Student authenticated:", user.displayName || user.email);
-            
-            // Update Top Bar UI
+            // Update Header UI immediately if user exists (verified or not)
             if (loginBtn) loginBtn.classList.add('hidden');
             if (userAvatar) {
                 userAvatar.classList.remove('hidden');
                 userPhoto.src = user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=6c5ce7&color=fff`;
                 userAvatar.title = `Logged in as ${user.displayName || user.email}`;
             }
+
+            if (!isVerified) {
+                // UI: Show verification shield
+                authOverlay.classList.add('hidden');
+                verificationOverlay.classList.remove('hidden');
+                document.getElementById('verification-email-display').textContent = user.email;
+                appLoadingOverlay.classList.add('hidden');
+                return;
+            }
+
+            // USER IS AUTHENTICATED & VERIFIED
+            window.currentUser = user;
+            authOverlay.classList.add('hidden');
+            verificationOverlay.classList.add('hidden');
+            document.body.style.overflow = '';
 
             // Sync User Profile in Firestore
             let needsOnboarding = false;
@@ -364,39 +374,44 @@ async function initFirebaseSync() {
                     });
                     needsOnboarding = true;
                 } else {
-                    const userData = userSnap.data();
-                    if (!userData.examType) {
+                    const data = userSnap.data();
+                    if (!data.examType) {
                         needsOnboarding = true;
                     }
                     await setDoc(userRef, { lastLoginAt: serverTimestamp() }, { merge: true });
                 }
             } catch (err) {
                 console.error("Firestore sync error:", err);
+                showToast('❌', 'Cloud sync failed. Working in local mode.');
             }
 
             if (needsOnboarding) {
                 document.getElementById('onboarding-overlay').classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
                 appLoadingOverlay.classList.add('hidden');
-                return; // Stop loading the dashboard until onboarding is complete
+                return;
             }
 
-            // Sync thoughts and fully load app
+            // Sync and load
             await engine.syncWithFirestore(user.uid);
             renderTodaysDumps();
             renderCurrentView();
-            appLoadingOverlay.classList.add('hidden'); // Ready
+            appLoadingOverlay.classList.add('hidden');
+
         } else {
-            // state: NOT LOGGED IN
+            // NOT LOGGED IN
             window.currentUser = null;
+            authOverlay.classList.add('hidden');
             verificationOverlay.classList.add('hidden');
-            authOverlay.classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-            
+            document.body.style.overflow = '';
+
             if (loginBtn) loginBtn.classList.remove('hidden');
             if (userAvatar) userAvatar.classList.add('hidden');
-            
-            appLoadingOverlay.classList.add('hidden'); // Ready to show auth screen
+
+            engine.thoughts = engine.loadThoughts();
+            renderTodaysDumps();
+            renderCurrentView();
+            appLoadingOverlay.classList.add('hidden');
         }
     });
 }
@@ -414,7 +429,7 @@ async function completeOnboarding() {
     }
 
     try {
-        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
         const userRef = doc(window.firebaseDB, "users", window.currentUser.uid);
         
         await updateDoc(userRef, {
@@ -644,6 +659,12 @@ function initEditor() {
 }
 
 function saveDump() {
+    if (!window.currentUser) {
+        showToast('🔒', 'Please log in to save and analyze your brain dumps.');
+        openAuthModal();
+        return;
+    }
+
     const editor = document.getElementById('dump-editor');
     const text = editor.value.trim();
 
@@ -1248,6 +1269,12 @@ function initMobileNav() {
 // ---- Weekly Honest Review ----
 
 function openWeeklyReview() {
+    if (!window.currentUser) {
+        showToast('🔒', 'Please log in to generate your Weekly Honest Review.');
+        openAuthModal();
+        return;
+    }
+
     if (!tierManager.canAccess('weekly_review')) {
         openUpgradeModal('weekly_review');
         return;
@@ -1504,9 +1531,34 @@ function initDecisionClarifier() {
         const words = textarea.value.trim().split(/\s+/).filter(Boolean).length;
         wordCount.textContent = `${words} word${words !== 1 ? 's' : ''}`;
     });
+    
+    // Pre-fill API key input if it exists
+    const existingKey = localStorage.getItem('thoughtstack_gemini_key');
+    if(existingKey) {
+        const input = document.getElementById('dc-gemini-key');
+        if(input) input.value = existingKey;
+    }
 }
 
-function runDecisionClarifier() {
+function saveGeminiKey() {
+    const key = document.getElementById('dc-gemini-key').value.trim();
+    if(key) {
+        localStorage.setItem('thoughtstack_gemini_key', key);
+        showToast('🔑', 'API Key saved securely to your browser.');
+        document.getElementById('dc-api-settings').classList.add('hidden');
+    } else {
+        localStorage.removeItem('thoughtstack_gemini_key');
+        showToast('ℹ️', 'API Key removed. Reverting to mock-engine.');
+    }
+}
+
+async function runDecisionClarifier() {
+    if (!window.currentUser) {
+        showToast('🔒', 'Please log in to use the Decision Clarifier.');
+        openAuthModal();
+        return;
+    }
+
     if (!tierManager.canAccess('decision_clarifier')) {
         openUpgradeModal('decision_clarifier');
         return;
@@ -1516,12 +1568,83 @@ function runDecisionClarifier() {
     const text = textarea.value.trim();
 
     if (text.split(/\s+/).length < 10) {
-        showToast('\u270d\ufe0f', 'Write at least 10 words about your decision. The more context, the sharper the questions.');
+        showToast('✍️', 'Write at least 10 words about your decision. The more context, the sharper the questions.');
         return;
     }
 
-    const result = DecisionClarifier.clarify(text);
-    renderDecisionResult(result, text);
+    const apiKey = localStorage.getItem('thoughtstack_gemini_key');
+    const thinkingState = document.getElementById('dc-thinking');
+    const resultState = document.getElementById('dc-results');
+    const aiResultState = document.getElementById('dc-ai-results');
+    const btn = document.getElementById('dc-clarify-btn');
+
+    // UI Prep
+    thinkingState.classList.remove('hidden');
+    resultState.classList.add('hidden');
+    aiResultState.classList.add('hidden');
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    
+    // Smooth scroll to orb
+    thinkingState.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    if (!apiKey) {
+        // MOCK ENGINE
+        setTimeout(() => {
+            const result = DecisionClarifier.clarify(text); // from engine.js
+            renderDecisionResult(result, text);
+            thinkingState.classList.add('hidden');
+            btn.disabled = false;
+            btn.textContent = '🔮 Clarify My Thinking';
+        }, 3000); // 3-second simulated processing delay
+        return;
+    }
+
+    // REAL LLM ENGINE (Gemini)
+    try {
+        const payload = {
+            contents: [{
+                parts: [{
+                    text: `You are a world-class strategic advisor and cognitive coach. Analyze the following decision a student is wrestling with. Provide a short, hard-hitting analysis. Identify the core conflict. Then, ask 3 sharp, incisive questions designed to break their mental loop and force clarity. Format nicely with bolding and spacing.\n\nThe student's dilemma:\n"${text}"`
+                }]
+            }]
+        };
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const llmResponse = data.candidates[0].content.parts[0].text;
+        
+        // Simple Markdown parsing
+        const htmlFormatted = llmResponse
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+
+        thinkingState.classList.add('hidden');
+        aiResultState.innerHTML = htmlFormatted;
+        aiResultState.classList.remove('hidden');
+        aiResultState.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    } catch (err) {
+        console.error("Gemini AI failed:", err);
+        showToast('❌', 'AI Request failed. Check your API key or connection.');
+        thinkingState.classList.add('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🔮 Clarify My Thinking';
+    }
 }
 
 function renderDecisionResult(result, originalText) {
@@ -1594,9 +1717,11 @@ window.switchAuthTab = switchAuthTab;
 window.handleAuthSubmit = handleAuthSubmit;
 window.handleSignOut = handleSignOut;
 window.resendVerification = resendVerification;
+window.verifyAndReload = verifyAndReload;
 window.openAccountModal = openAccountModal;
 window.closeAccountModal = closeAccountModal;
 window.updateAccountName = updateAccountName;
 window.sendAccountPasswordReset = sendAccountPasswordReset;
 window.deleteUserAccount = deleteUserAccount;
 window.completeOnboarding = completeOnboarding;
+window.saveGeminiKey = saveGeminiKey;

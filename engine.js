@@ -29,7 +29,7 @@ class ThoughtEngine {
         this.uid = uid;
         
         try {
-            const { collection, getDocs, query, orderBy } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+            const { collection, getDocs, query, orderBy } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
             const q = query(collection(window.firebaseDB, `users/${this.uid}/thoughts`), orderBy("timestamp", "desc"));
             const querySnapshot = await getDocs(q);
             
@@ -54,7 +54,7 @@ class ThoughtEngine {
         if (!this.uid || !window.firebaseDB || this.thoughts.length === 0) return;
         
         try {
-            const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+            const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
             // Backup the most recent thought
             const latest = this.thoughts[0];
             await setDoc(doc(window.firebaseDB, `users/${this.uid}/thoughts`, latest.id), latest);

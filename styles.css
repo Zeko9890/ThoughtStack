@@ -3464,6 +3464,44 @@ body {
 }
 
 /* ===========================
+   Decision Clarifier AI
+   =========================== */
+
+.ai-orb {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--accent-primary), var(--accent-secondary));
+    box-shadow: 0 0 30px var(--accent-primary);
+    animation: pulseOrb 2s ease-in-out infinite, floatOrb 4s ease-in-out infinite;
+    position: relative;
+    z-index: 10;
+}
+
+.ai-orb::before {
+    content: '';
+    position: absolute;
+    inset: -15px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent, var(--accent-primary), transparent);
+    animation: rotateConic 3s linear infinite;
+    opacity: 0.4;
+    z-index: -1;
+}
+
+@keyframes pulseOrb {
+    0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 20px var(--accent-primary); }
+    50% { transform: scale(1.15); opacity: 0.85; box-shadow: 0 0 40px var(--accent-primary); }
+}
+@keyframes floatOrb {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+@keyframes rotateConic {
+    to { transform: rotate(360deg); }
+}
+
+/* ===========================
    Upgrade Modal
    =========================== */
 

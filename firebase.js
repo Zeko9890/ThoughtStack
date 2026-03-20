@@ -1,6 +1,6 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-analytics.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { 
     getAuth, 
     GoogleAuthProvider, 
@@ -12,7 +12,7 @@ import {
     signOut,
     setPersistence,
     browserLocalPersistence
-} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCpUwOE7LCjgAUfeN2HAs8Tez7jGeYZGgg",

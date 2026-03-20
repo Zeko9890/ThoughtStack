@@ -425,8 +425,17 @@
                                 <p>Got a big decision? Dump your thinking and get 3 sharp questions.</p>
                             </div>
                         </div>
+                        <button class="btn btn-ghost" style="padding: 4px 8px; font-size: 12px; border: none;" onclick="document.getElementById('dc-api-settings').classList.toggle('hidden')">⚙️ Settings</button>
                     </div>
                     <div class="dc-body" id="dc-body">
+                        <div id="dc-api-settings" class="hidden" style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); display: block; margin-bottom: 8px;">GEMINI API KEY (Real AI)</label>
+                            <div style="display:flex; gap: 8px;">
+                                <input type="password" id="dc-gemini-key" placeholder="AIzaSy..." style="flex:1; padding: 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-family: monospace;">
+                                <button class="btn btn-secondary" onclick="saveGeminiKey()">Save key</button>
+                            </div>
+                            <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">If empty, ThoughtStack will use a powerful mock-engine fallback.</p>
+                        </div>
                         <textarea class="dc-textarea" id="dc-textarea" placeholder="What decision are you wrestling with? Write everything — the options, the fears, the pressure, the confusion. The messier the better."></textarea>
                         <div class="dc-footer">
                             <span class="dc-word-count" id="dc-word-count">0 words</span>
@@ -434,7 +443,18 @@
                                 🔮 Clarify My Thinking
                             </button>
                         </div>
+
+                        <!-- Thinking State (Hidden by default) -->
+                        <div id="dc-thinking" class="hidden" style="padding: 40px 0; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+                            <div class="ai-orb"></div>
+                            <p style="color: var(--accent-primary); font-weight: 600; font-family: var(--font-mono); font-size: 13px;" id="dc-thinking-text">Analyzing your thought structures...</p>
+                        </div>
+
+                        <!-- Results State -->
                         <div class="dc-results hidden" id="dc-results"></div>
+                        
+                        <!-- AI Result Markdown State (For Gemini) -->
+                        <div id="dc-ai-results" class="hidden" style="padding-top: 24px; border-top: 1px solid var(--border); margin-top: 24px; line-height: 1.6; color: var(--text-primary);"></div>
                     </div>
                 </div>
             </div>
@@ -527,6 +547,7 @@
     <!-- Auth Modal -->
     <div class="auth-overlay hidden" id="auth-overlay">
         <div class="auth-modal">
+            <button class="auth-close" onclick="closeAuthModal()">&times;</button>
             <div class="auth-tabs">
                 <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Login</button>
                 <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
@@ -578,7 +599,7 @@
             <p>We've sent a verification link to <strong id="verification-email-display">your email</strong>.</p>
             <p class="verification-sub">Please verify your email to unlock your ThoughtStack.</p>
             <div class="verification-actions">
-                <button class="btn btn-primary" onclick="window.location.reload()">I've Verified</button>
+                <button class="btn btn-primary" onclick="verifyAndReload()">I've Verified</button>
                 <button class="btn btn-ghost" onclick="resendVerification()">Resend verification email</button>
             </div>
             <button class="verification-logout" onclick="handleSignOut()">Use another account</button>
