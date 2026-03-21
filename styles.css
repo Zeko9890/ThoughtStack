@@ -83,6 +83,78 @@
     --transition-slow: 400ms var(--ease-out);
 }
 
+/* ===========================
+   ThoughtStack Global Utilities
+   =========================== */
+
+.hidden {
+    display: none !important;
+}
+
+/* ===========================
+   Home Landing Page
+   =========================== */
+
+.home-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - var(--nav-height) - 100px);
+    padding: 40px 24px;
+    text-align: center;
+    animation: fadeIn 0.8s var(--ease-out);
+}
+
+.home-hero {
+    max-width: 700px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.logo-frame {
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    padding: 10px; /* 10px bezels */
+    border-radius: var(--radius-md); /* Curved edges */
+    margin-bottom: 40px;
+    box-shadow: var(--shadow-lg);
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.hero-logo {
+    max-width: 420px;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+}
+
+.hero-cta h1 {
+    font-size: clamp(32px, 5vw, 48px);
+    font-weight: 900;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero-cta p {
+    font-size: clamp(16px, 2vw, 18px);
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    max-width: 500px;
+    margin-inline: auto;
+}
+
+.btn-lg {
+    padding: 16px 40px;
+    font-size: 18px;
+    border-radius: var(--radius-xl);
+}
+
 /* Red / Black for JEE */
 [data-course="JEE"] {
     --accent-primary: #ff4757;
@@ -288,11 +360,14 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-sm);
-    background: rgba(108, 92, 231, 0.1);
-    border: 1px solid rgba(108, 92, 231, 0.2);
+    width: 32px;
+    height: 32px;
+}
+
+.brand-icon img {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
 }
 
 .brand-name {
