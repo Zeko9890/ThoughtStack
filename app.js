@@ -658,7 +658,7 @@ function initEditor() {
     });
 }
 
-function saveDump() {
+async function saveDump() {
     if (!window.currentUser) {
         showToast('🔒', 'Please log in to save and analyze your brain dumps.');
         openAuthModal();
@@ -677,6 +677,67 @@ function saveDump() {
     if (text.length < 10) {
         showToast('⚠️', 'Write at least a few sentences for useful analysis.');
         return;
+    }
+
+    const saveBtn = document.getElementById('save-dump');
+    const originalBtnHTML = saveBtn.innerHTML;
+    const msgContainer = document.getElementById('validation-message-container');
+    const msgText = document.getElementById('validation-text');
+    
+    // Hide previous message
+    if (msgContainer) msgContainer.classList.add('hidden');
+
+    const apiKey = localStorage.getItem('thoughtstack_gemini_key');
+    if (apiKey) {
+        saveBtn.innerHTML = `<span>Validating...</span>`;
+        saveBtn.style.opacity = '0.7';
+        saveBtn.disabled = true;
+
+        try {
+            const prompt = `You are a validator for ThoughtStack, an app where students reflect on their own study sessions. Accept the input only if it contains personal reflection like what they studied, how they felt, what confused them, or their habits. Reject generic questions like how to study, how to top JEE, or any question that is not personal self reflection. If rejected, return a short friendly message telling them what kind of input is expected. If accepted, return the extracted insights.
+
+INPUT TO VALIDATE:
+"${text}"
+
+IMPORTANT: Respond strictly in JSON format.
+If accepted: {"status": "accepted"}
+If rejected: {"status": "rejected", "message": "Your short friendly message here"}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            };
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error('Validation API error');
+
+            const data = await response.json();
+            const llmResponse = data.candidates[0].content.parts[0].text;
+            const result = JSON.parse(llmResponse);
+
+            if (result.status === 'rejected') {
+                if (msgText) msgText.textContent = result.message || "Please write a personal reflection about your study session, not a generic question.";
+                if (msgContainer) msgContainer.classList.remove('hidden');
+                
+                // Restore button
+                saveBtn.innerHTML = originalBtnHTML;
+                saveBtn.style.opacity = '1';
+                saveBtn.disabled = false;
+                return; // Stop saving!
+            }
+        } catch (err) {
+            console.error('Validation failed, proceeding anyway:', err);
+        }
+        
+        // Restore button state
+        saveBtn.innerHTML = originalBtnHTML;
+        saveBtn.style.opacity = '1';
+        saveBtn.disabled = false;
     }
 
     // Just send raw text + exam. Engine auto-extracts everything.
@@ -786,6 +847,9 @@ Rules:
             contentEl.innerHTML = `<div class="ai-raw-response">${htmlFormatted}</div>`;
             contentEl.classList.remove('hidden');
             contentEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            // Load relevant practice problems
+            initPracticeProblems(currentExam, thought.topics);
 
         } catch (err) {
             console.error('AI Coach (Gemini) failed:', err);
@@ -939,6 +1003,172 @@ function generateMockCoachResponse(dumpText, thought, thinkingEl, contentEl) {
     setTimeout(() => {
         contentEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
+
+    // Load relevant practice problems
+    initPracticeProblems(currentExam, thought.topics);
+}
+
+// ---- Practice Problems Management ----
+
+let currentProblems = [];
+let correctCount = 0;
+let totalAnswered = 0;
+
+function initPracticeProblems(exam, topics) {
+    const container = document.getElementById('practice-problems');
+    const list = document.getElementById('practice-problems-list');
+    const topicTag = document.getElementById('practice-topic-tag');
+    const scoreBar = document.getElementById('practice-score-bar');
+
+    // Reset state
+    currentProblems = [];
+    correctCount = 0;
+    totalAnswered = 0;
+    scoreBar.classList.add('hidden');
+    container.classList.add('hidden');
+
+    if (!exam || !PRACTICE_PROBLEMS[exam]) return;
+
+    // Pick 3-5 problems based on topics
+    const examData = PRACTICE_PROBLEMS[exam];
+    const matchedTopics = topics && topics.length > 0 ? topics : Object.keys(examData);
+    
+    // Flatten all problems from matched topics
+    let pool = [];
+    matchedTopics.forEach(topic => {
+        if (examData[topic]) {
+            pool = pool.concat(examData[topic].map(p => ({ ...p, topic, originalIndex: Math.random() })));
+        }
+    });
+
+    if (pool.length === 0) {
+        // Fallback to random problems from this exam if no topic match
+        Object.keys(examData).forEach(topic => {
+            pool = pool.concat(examData[topic].map(p => ({ ...p, topic, originalIndex: Math.random() })));
+        });
+    }
+
+    // Shuffle and pick 3
+    pool.sort((a, b) => a.originalIndex - b.originalIndex);
+    currentProblems = pool.slice(0, 3).map((p, idx) => ({ 
+        ...p, 
+        id: idx, 
+        userAnswer: null,
+        isAnswered: false 
+    }));
+
+    if (currentProblems.length > 0) {
+        const primaryTopic = topics && topics.length > 0 ? topics[0] : 'General Recap';
+        topicTag.textContent = primaryTopic;
+        container.classList.remove('hidden');
+        renderProblems(currentProblems);
+    }
+}
+
+function renderProblems(problems) {
+    const list = document.getElementById('practice-problems-list');
+    
+    list.innerHTML = problems.map((prob, idx) => `
+        <div class="problem-card ${prob.isAnswered ? 'answered' : ''}" id="problem-${prob.id}">
+            <div class="problem-card-header">
+                <p class="problem-question">${prob.q}</p>
+                <span class="problem-difficulty ${prob.difficulty}">${prob.difficulty}</span>
+            </div>
+            <div class="problem-options">
+                ${prob.options.map((opt, optIdx) => {
+                    let className = 'problem-option';
+                    if (prob.isAnswered) {
+                        if (optIdx === prob.answer) className += ' correct';
+                        else if (optIdx === prob.userAnswer) className += ' wrong';
+                    } else if (prob.userAnswer === optIdx) {
+                        className += ' selected';
+                    }
+                    return `
+                        <button class="${className}" 
+                                onclick="selectOption(${prob.id}, ${optIdx})"
+                                ${prob.isAnswered ? 'disabled' : ''}>
+                            <span class="problem-option-prefix">${String.fromCharCode(65 + optIdx)}</span>
+                            <span>${opt}</span>
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+            ${prob.isAnswered ? `
+                <div class="problem-explanation">
+                    <strong>💡 Explanation:</strong> ${prob.explanation}
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+function selectOption(probId, optIdx) {
+    const prob = currentProblems.find(p => p.id === probId);
+    if (!prob || prob.isAnswered) return;
+
+    prob.userAnswer = optIdx;
+    prob.isAnswered = true;
+    
+    if (optIdx === prob.answer) {
+        correctCount++;
+        showToast('✅', 'Correct! Great job.');
+    } else {
+        showToast('❌', 'Oops! Check the explanation.');
+    }
+    
+    totalAnswered++;
+    updateScoreBar();
+    renderProblems(currentProblems);
+}
+
+function updateScoreBar() {
+    const bar = document.getElementById('practice-score-bar');
+    const text = document.getElementById('practice-score-text');
+    const fill = document.getElementById('practice-score-fill');
+
+    bar.classList.remove('hidden');
+    text.textContent = `${correctCount}/${totalAnswered} correct`;
+    
+    const percentage = (correctCount / totalAnswered) * 100;
+    fill.style.width = percentage + '%';
+}
+
+function filterPracticeProblems(diff) {
+    // Update active button
+    document.querySelectorAll('.practice-diff-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.diff === diff);
+    });
+
+    if (diff === 'all') {
+        renderProblems(currentProblems);
+    } else {
+        const filtered = currentProblems.filter(p => p.difficulty === diff);
+        if (filtered.length === 0) {
+            document.getElementById('practice-problems-list').innerHTML = `
+                <div class="ai-coach-thinking-text" style="text-align: center; width: 100%; padding: 20px;">
+                    No ${diff} problems found for this session. Use 'All' to see all matches.
+                </div>
+            `;
+        } else {
+            renderProblems(filtered);
+        }
+    }
+}
+
+function retryPracticeProblems() {
+    // Reset user answers in current set
+    currentProblems.forEach(p => {
+        p.userAnswer = null;
+        p.isAnswered = false;
+    });
+    
+    correctCount = 0;
+    totalAnswered = 0;
+    
+    document.getElementById('practice-score-bar').classList.add('hidden');
+    renderProblems(currentProblems);
+    
+    showToast('🔄', 'Try again! You got this.');
 }
 
 function showQuickInsights(insights) {
