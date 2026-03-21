@@ -774,11 +774,6 @@ async function runAICoach(dumpText, thought) {
     contentEl.classList.add('hidden');
     contentEl.innerHTML = '';
 
-    // Smooth scroll to AI coach
-    setTimeout(() => {
-        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 200);
-
     const apiKey = localStorage.getItem('thoughtstack_gemini_key');
 
     if (apiKey) {
