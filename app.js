@@ -694,7 +694,251 @@ function saveDump() {
     updateStreak();
     renderTodaysDumps();
 
+    // Trigger AI Coach response
+    runAICoach(text, thought);
+
     showToast('🧠', 'Thought stacked! Everything auto-analyzed.');
+}
+
+// ---- AI Coach — Problem-Solving Advice + Motivation ----
+
+async function runAICoach(dumpText, thought) {
+    const container = document.getElementById('ai-coach-response');
+    const thinkingEl = document.getElementById('ai-coach-thinking');
+    const contentEl = document.getElementById('ai-coach-content');
+
+    // Show the coach container with thinking state
+    container.classList.remove('hidden');
+    thinkingEl.classList.remove('hidden');
+    contentEl.classList.add('hidden');
+    contentEl.innerHTML = '';
+
+    // Smooth scroll to AI coach
+    setTimeout(() => {
+        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 200);
+
+    const apiKey = localStorage.getItem('thoughtstack_gemini_key');
+
+    if (apiKey) {
+        // --- REAL AI (Gemini) ---
+        try {
+            const subjectName = thought.subject.charAt(0).toUpperCase() + thought.subject.slice(1);
+            const confLabels = { 1: 'Very Low', 2: 'Low', 3: 'Moderate', 4: 'High', 5: 'Very High' };
+            const topicsStr = (thought.topics || []).join(', ') || 'general study';
+            const confusionLevel = thought.sentiment?.confusion || 0;
+            const insightLevel = thought.sentiment?.insight || 0;
+            const habitsStr = (thought.habits || []).map(h => h.label).join(', ') || 'none detected';
+
+            const prompt = `You are a warm, empathetic yet no-nonsense AI study coach for an Indian student preparing for ${currentExam}. The student just finished a brain-dump about their study session. 
+
+Here is their brain dump:
+"${dumpText}"
+
+Context about this dump:
+- Subject: ${subjectName}
+- Topics covered: ${topicsStr}
+- Confidence level: ${confLabels[thought.confidence]} (${thought.confidence}/5)
+- Confusion signals detected: ${confusionLevel}
+- Insight/eureka signals: ${insightLevel}
+- Study habits spotted: ${habitsStr}
+- Focus quality: ${thought.focusQuality?.label || 'Unknown'} (${thought.focusQuality?.score || '?'}/100)
+
+Your job:
+1. **Acknowledge** what they studied and what's going well (be specific to their content)
+2. **Identify the core problem** — if they expressed confusion, frustration, or struggle, pinpoint exactly what seems to be the issue and suggest a concrete approach to solve it (specific techniques, resources, or strategies)
+3. **Give 2-3 actionable next steps** — very specific things they can do RIGHT NOW to improve their understanding
+4. **End with genuine motivation** — not generic "you can do it" but something specific to THEIR situation, their progress, their exam
+
+Rules:
+- Be direct and specific, not generic
+- Use bolding for key points
+- Keep it concise (under 200 words)
+- Sound like a supportive senior who's been through this exam, not a robot
+- If they seem to be doing well, celebrate that and push them to go deeper
+- If they seem confused, be reassuring but honest about the work needed`;
+
+            const payload = {
+                contents: [{
+                    parts: [{ text: prompt }]
+                }]
+            };
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+            const data = await response.json();
+            const llmResponse = data.candidates[0].content.parts[0].text;
+
+            // Parse markdown to HTML
+            const htmlFormatted = llmResponse
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\n\n/g, '<br><br>')
+                .replace(/\n/g, '<br>');
+
+            thinkingEl.classList.add('hidden');
+            contentEl.innerHTML = `<div class="ai-raw-response">${htmlFormatted}</div>`;
+            contentEl.classList.remove('hidden');
+            contentEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        } catch (err) {
+            console.error('AI Coach (Gemini) failed:', err);
+            // Fallback to mock engine
+            generateMockCoachResponse(dumpText, thought, thinkingEl, contentEl);
+        }
+
+    } else {
+        // --- MOCK ENGINE (No API Key) ---
+        // Simulate a brief delay for realism
+        setTimeout(() => {
+            generateMockCoachResponse(dumpText, thought, thinkingEl, contentEl);
+        }, 2000);
+    }
+}
+
+function generateMockCoachResponse(dumpText, thought, thinkingEl, contentEl) {
+    const subjectName = thought.subject.charAt(0).toUpperCase() + thought.subject.slice(1);
+    const confidence = thought.confidence;
+    const confusion = thought.sentiment?.confusion || 0;
+    const insightCount = thought.sentiment?.insight || 0;
+    const topics = thought.topics || [];
+    const habits = thought.habits || [];
+    const focusScore = thought.focusQuality?.score || 50;
+    const wordCount = thought.wordCount || dumpText.split(/\s+/).length;
+
+    let acknowledgeHtml = '';
+    let problemHtml = '';
+    let stepsHtml = '';
+    let motivationText = '';
+
+    // ---- 1. Acknowledge what went well ----
+    if (confidence >= 4 && insightCount > 0) {
+        acknowledgeHtml = `<p>Really solid session on <strong>${subjectName}</strong>! You're clearly building real understanding, not just surface-level reading. ${topics.length > 0 ? `Your grasp of <strong>${topics.slice(0, 2).join('</strong> and <strong>')}</strong> is getting sharper.` : ''}</p>`;
+    } else if (confidence >= 3) {
+        acknowledgeHtml = `<p>Good effort on <strong>${subjectName}</strong> today. ${topics.length > 0 ? `You covered ${topics.slice(0, 3).join(', ')} — that takes focus.` : 'You showed up and put in the work — that matters.'}</p>`;
+    } else {
+        acknowledgeHtml = `<p>Hey, the fact that you sat down and studied <strong>${subjectName}</strong> today already puts you ahead of most. ${wordCount > 100 ? 'And you wrote a detailed dump — that shows you\'re taking this seriously.' : 'Every session counts, even the rough ones.'}</p>`;
+    }
+
+    // ---- 2. Identify the core problem ----
+    if (confusion > 0 && confidence <= 2) {
+        const confusedTopics = topics.length > 0 ? topics.slice(0, 2).join(' and ') : subjectName;
+        problemHtml = `
+            <div class="coach-section">
+                <div class="coach-section-title">🔍 What I noticed</div>
+                <div class="coach-section-body">
+                    <p>You're hitting a wall with <strong>${confusedTopics}</strong> — and that's completely normal. Most toppers have been exactly where you are right now. The confusion isn't a sign of weakness, it's your brain wrestling with something new.</p>
+                    <p>Here's the thing: <strong>confusion that you recognize is halfway to clarity.</strong> The students who fail are the ones who don't even notice they're confused.</p>
+                </div>
+            </div>`;
+    } else if (confusion > 0) {
+        problemHtml = `
+            <div class="coach-section">
+                <div class="coach-section-title">🔍 What I noticed</div>
+                <div class="coach-section-body">
+                    <p>There are some foggy areas in your understanding — that's normal when you're pushing into deeper territory. The key is not to leave these gaps unresolved.</p>
+                </div>
+            </div>`;
+    } else if (focusScore < 40) {
+        problemHtml = `
+            <div class="coach-section">
+                <div class="coach-section-title">🔍 What I noticed</div>
+                <div class="coach-section-body">
+                    <p>Your focus seemed a bit scattered this session. That's okay — we all have off days. But let's make sure this doesn't become a pattern. Try shorter, more intense study blocks next time.</p>
+                </div>
+            </div>`;
+    }
+
+    // ---- 3. Actionable next steps ----
+    const steps = [];
+
+    if (confusion > 0) {
+        steps.push(`<strong>Isolate the confusion</strong> — Open a blank page and write down exactly what you don't understand about ${topics[0] || subjectName}. Be as specific as possible. "I don't get it" becomes "I don't understand why X leads to Y."`);
+        steps.push(`<strong>Watch one targeted explanation</strong> — Find a 10-min video specifically on the concept that's confusing you. Sometimes a different perspective is all you need.`);
+    }
+
+    if (confidence <= 3) {
+        steps.push(`<strong>Do 3 practice problems</strong> — Not easy ones. Pick problems that are slightly above your comfort level on ${topics[0] || subjectName}. Struggle is where learning happens.`);
+    }
+
+    if (habits.some(h => h.label === 'passive reading')) {
+        steps.push(`<strong>Switch from reading to doing</strong> — You mentioned reading/going through notes. Try active recall instead: close the book and write down everything you remember. Then check what you missed.`);
+    }
+
+    if (habits.some(h => h.label === 'pressure/stress' || h.label === 'burnt out')) {
+        steps.push(`<strong>Take care of yourself</strong> — I can sense the pressure. Take a 20-minute walk or rest before your next session. A fresh mind solves 2x faster than a tired one.`);
+    }
+
+    if (confidence >= 4 && insightCount > 0) {
+        steps.push(`<strong>Teach it to someone</strong> — You seem to have a solid grasp. Explain what you learned to a friend or even to yourself out loud. If you can teach it, you truly own it.`);
+        steps.push(`<strong>Attempt PYQs on this topic</strong> — Test your understanding against actual previous year questions. This is where theory meets reality.`);
+    }
+
+    if (focusScore >= 70) {
+        steps.push(`<strong>Ride this momentum</strong> — Your focus was strong today. Schedule another session at the same time tomorrow to build a streak. Consistency beats intensity.`);
+    }
+
+    // Fallback if no steps generated
+    if (steps.length === 0) {
+        steps.push(`<strong>Review today's topics tomorrow</strong> — Space repetition is your secret weapon. Revisit ${topics[0] || subjectName} after 24 hours and see how much you retain.`);
+        steps.push(`<strong>Connect the dots</strong> — Try linking what you studied today with something you learned last week. Cross-topic connections make knowledge stick.`);
+    }
+
+    stepsHtml = steps.slice(0, 3).map(step => `<div class="coach-step">${step}</div>`).join('');
+
+    // ---- 4. Motivation ----
+    const motivations = {
+        highConfidence: [
+            `You're building real momentum. This is what separates the ones who clear ${currentExam} from the ones who just "prepare." Keep stacking.`,
+            `${currentExam} rewards consistent thinkers, not last-minute crammers. You're doing exactly the right thing. Keep this up.`,
+            `Every dump you write is proof that you're not just studying — you're thinking. That's the difference maker.`
+        ],
+        lowConfidence: [
+            `Listen — every topper who cleared ${currentExam} has sat exactly where you're sitting right now, feeling exactly what you're feeling. The only difference? They didn't stop. Neither will you.`,
+            `Confusion today is clarity tomorrow. The fact that you recognized what you don't know is already half the battle. You've got this.`,
+            `${currentExam} is hard. It's supposed to be. But you're here, putting in the work, being honest about your gaps. That takes more courage than most people have.`
+        ],
+        moderate: [
+            `Steady progress is still progress. You're one session closer to where you need to be. Don't underestimate the power of showing up consistently.`,
+            `You studied, you reflected, you identified what needs work. That's the loop that leads to results. Keep going — you're closer than you think.`,
+            `The students who crack ${currentExam} aren't the ones who never struggled. They're the ones who kept showing up after the struggle. Just like you did today.`
+        ]
+    };
+
+    let motivationPool;
+    if (confidence >= 4) motivationPool = motivations.highConfidence;
+    else if (confidence <= 2) motivationPool = motivations.lowConfidence;
+    else motivationPool = motivations.moderate;
+
+    motivationText = motivationPool[Math.floor(Math.random() * motivationPool.length)];
+
+    // ---- Assemble final HTML ----
+    const finalHtml = `
+        <div class="coach-section">
+            <div class="coach-section-title">✨ Recognition</div>
+            <div class="coach-section-body">${acknowledgeHtml}</div>
+        </div>
+        ${problemHtml}
+        <div class="coach-section">
+            <div class="coach-section-title">🛠️ Your Next Moves</div>
+            <div class="coach-section-body">${stepsHtml}</div>
+        </div>
+        <div class="coach-motivation">${motivationText}</div>
+    `;
+
+    thinkingEl.classList.add('hidden');
+    contentEl.innerHTML = finalHtml;
+    contentEl.classList.remove('hidden');
+
+    setTimeout(() => {
+        contentEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
 }
 
 function showQuickInsights(insights) {
