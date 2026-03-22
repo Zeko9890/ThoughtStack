@@ -63,8 +63,8 @@ class ThoughtEngine {
         }
     }
 
-    // Accept raw text + exam + manual subject.
-    addThought(rawText, exam, manualSubject = null) {
+    // Accept raw text + exam + manual subject + optional AI analysis.
+    addThought(rawText, exam, manualSubject = null, aiAnalysis = null) {
         const text = rawText.trim();
         const wordCount = text.split(/\s+/).filter(Boolean).length;
         const now = new Date();
@@ -77,15 +77,16 @@ class ThoughtEngine {
             date: now.toISOString(),
             dayKey: this.getDayKey(now),
             wordCount,
-            // All auto-extracted or manual
-            subject: this.detectSubject(text, exam, manualSubject),
-            confidence: this.detectConfidence(text),
-            focusQuality: this.detectFocusQuality(text),
-            habits: this.detectHabits(text),
-            topics: this.extractTopics(text),
-            sentiment: this.analyzeSentiment(text),
-            thinkingType: this.classifyThinking(text),
-            keywords: this.extractKeywords(text)
+            // Use AI analysis if available, otherwise fall back to local engine
+            subject: aiAnalysis ? aiAnalysis.subject : this.detectSubject(text, exam, manualSubject),
+            confidence: aiAnalysis ? aiAnalysis.confidence : this.detectConfidence(text),
+            focusQuality: aiAnalysis ? aiAnalysis.focusQuality : this.detectFocusQuality(text),
+            topics: aiAnalysis ? [aiAnalysis.topic] : this.extractTopics(text),
+            patternObservation: aiAnalysis ? aiAnalysis.patternObservation : null,
+            habits: aiAnalysis ? [] : this.detectHabits(text), // Local engine habits
+            sentiment: aiAnalysis ? null : this.analyzeSentiment(text),
+            thinkingType: aiAnalysis ? null : this.classifyThinking(text),
+            keywords: aiAnalysis ? [] : this.extractKeywords(text)
         };
 
         this.thoughts.unshift(entry);

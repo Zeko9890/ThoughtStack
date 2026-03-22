@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initEditor();
     initModal();
     initMobileNav();
-    initDecisionClarifier();
+    initTutorChat();
     initFirebaseSync();
     updateStreak();
     updateDumpDate();
@@ -514,6 +514,10 @@ function renderCurrentView() {
         case 'contradictions': renderContradictions(); break;
         case 'blindspots': renderBlindSpots(); break;
         case 'insights': renderInsights(); break;
+        case 'tutor':
+            const tutorExamLabel = document.getElementById('tutor-exam-label');
+            if (tutorExamLabel) tutorExamLabel.textContent = currentExam;
+            break;
     }
 }
 
@@ -681,94 +685,149 @@ async function saveDump() {
 
     const saveBtn = document.getElementById('save-dump');
     const originalBtnHTML = saveBtn.innerHTML;
-    const msgContainer = document.getElementById('validation-message-container');
-    const msgText = document.getElementById('validation-text');
-    
-    // Hide previous message
-    if (msgContainer) msgContainer.classList.add('hidden');
+    saveBtn.innerHTML = '<span class="spinner-small"></span> Analyzing...';
+    saveBtn.disabled = true;
 
-    // Make sure we have a subject if it's suspiciously short or a question
-    if (!selectedSubject && text.includes('?') && text.split(' ').length < 20) {
-        if (msgText) msgText.textContent = "ThoughtStack is for reflecting on your studies, not answering generic questions! If this IS a reflection, please select a subject pill above first.";
-        if (msgContainer) msgContainer.classList.remove('hidden');
-        saveBtn.innerHTML = originalBtnHTML;
-        saveBtn.style.opacity = '1';
-        saveBtn.disabled = false;
-        return;
-    }
-
-    const apiKey = localStorage.getItem('thoughtstack_gemini_key');
-    if (apiKey) {
-        saveBtn.innerHTML = `<span>Validating...</span>`;
-        saveBtn.style.opacity = '0.7';
-        saveBtn.disabled = true;
-
-        try {
-            const prompt = `You are a validator for ThoughtStack, an app where students reflect on their own study sessions. Accept the input only if it contains personal reflection like what they studied, how they felt, what confused them, or their habits. Reject generic questions like how to study, how to top JEE, or any question that is not personal self reflection. If rejected, return a short friendly message telling them what kind of input is expected. If accepted, return the extracted insights.
-
-INPUT TO VALIDATE:
-"${text}"
-
-IMPORTANT: Respond strictly in JSON format.
-If accepted: {"status": "accepted"}
-If rejected: {"status": "rejected", "message": "Your short friendly message here"}`;
-
-            const payload = {
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
-            };
-
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) throw new Error('Validation API error');
-
-            const data = await response.json();
-            const llmResponse = data.candidates[0].content.parts[0].text;
-            
-            // Clean markdown backticks to prevent JSON.parse crashes
-            const cleanJson = llmResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-            const result = JSON.parse(cleanJson);
-
-            if (result.status === 'rejected') {
-                if (msgText) msgText.textContent = result.message || "Please write a personal reflection about your study session, not a generic question.";
-                if (msgContainer) msgContainer.classList.remove('hidden');
-                
-                // Restore button
-                saveBtn.innerHTML = originalBtnHTML;
-                saveBtn.style.opacity = '1';
-                saveBtn.disabled = false;
-                return; // Stop saving!
-            }
-        } catch (err) {
-            console.error('Validation failed, proceeding anyway:', err);
-            // If the user doesn't write a reflection, the AI coach will just say it looks like physics
-            // if we blindly proceed. We should at least warn if it's too suspiciously short or a question.
-            if (text.includes('?')) {
-                if (msgText) msgText.textContent = "It looks like you're asking a question. ThoughtStack works best when you write a personal reflection about what you studied!";
-                if (msgContainer) msgContainer.classList.remove('hidden');
-                saveBtn.innerHTML = originalBtnHTML;
-                saveBtn.style.opacity = '1';
-                saveBtn.disabled = false;
-                return;
-            }
-        }
+    try {
+        const projectId = import.meta.env ? import.meta.env.VITE_FIREBASE_PROJECT_ID : 'your-project-id';
+        const functionUrl = `https://us-central1-${projectId}.cloudfunctions.net/validateDump`;
         
-        // Restore button state
-        saveBtn.innerHTML = originalBtnHTML;
-        saveBtn.style.opacity = '1';
-        saveBtn.disabled = false;
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+
+        if (!response.ok) throw new Error('Validation endpoint error');
+        const validation = await response.json();
+
+        if (!validation.valid) {
+            showToast('⚠️', validation.reason || 'This doesn\'t look like a study reflection.');
+            if (validation.redirect === 'tutor') {
+                if (typeof redirectToTutor === 'function') {
+                    redirectToTutor(text);
+                } else {
+                    showToast('🤖', 'AI Tutor screen pending restoration. Please ask there!');
+                }
+            }
+            saveBtn.innerHTML = originalBtnHTML;
+            saveBtn.disabled = false;
+            return;
+        }
+
+        // NEW: Call analyzeDump API
+        const analyzeUrl = `https://us-central1-${projectId}.cloudfunctions.net/analyzeDump`;
+        const analyzeRes = await fetch(analyzeUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, examType: currentExam })
+        });
+
+        if (!analyzeRes.ok) throw new Error('Analyze endpoint error');
+        const analysis = await analyzeRes.json();
+
+        // Use AI analysis and bypass local engine logic
+        const thought = engine.addThought(text, currentExam, selectedSubject, analysis);
+        if (typeof engine.saveData === 'function') engine.saveData();
+
+        const insights = [];
+        const examData = EXAM_SYLLABI[currentExam];
+        const subjectIcon = examData?.subjects[thought.subject]?.icon || '📚';
+        
+        insights.push({
+            label: 'AI-Detected Subject',
+            value: String(thought.subject).charAt(0).toUpperCase() + String(thought.subject).slice(1),
+            icon: subjectIcon
+        });
+
+        if (analysis.topic) {
+            insights.push({ label: 'Specific Topic', value: analysis.topic, icon: '📌' });
+        }
+
+        const confLabels = { 1: 'Very Low', 2: 'Low', 3: 'Moderate', 4: 'High', 5: 'Very High' };
+        const confEmojis = { 1: '😰', 2: '🤔', 3: '🤷', 4: '😊', 5: '💪' };
+        insights.push({
+            label: 'Analysis: Confidence',
+            value: `${confEmojis[thought.confidence] || '🤷'} ${confLabels[thought.confidence] || 'Moderate'}`,
+            icon: '🎯'
+        });
+
+        if (thought.focusQuality) {
+            insights.push({
+                label: 'Analysis: Focus',
+                value: `${thought.focusQuality.label} (${thought.focusQuality.score}/100)`,
+                icon: '🔍'
+            });
+        }
+
+        if (analysis.patternObservation) {
+            insights.push({
+                label: 'Psychological Pattern',
+                value: analysis.patternObservation,
+                icon: '🧠'
+            });
+        }
+
+        showQuickInsights(insights);
+
+        // Render AI Practice Questions
+        if (analysis.practiceQuestions && analysis.practiceQuestions.length > 0) {
+            document.getElementById('practice-problems').classList.remove('hidden');
+            document.getElementById('practice-topic-tag').textContent = analysis.topic || 'Practice';
+            
+            const list = document.getElementById('practice-problems-list');
+            list.innerHTML = analysis.practiceQuestions.map((q, idx) => `
+                <div class="problem-card" style="background: var(--surface-light); padding: 15px; border-radius: 8px; margin-bottom: 12px;">
+                    <div class="problem-q" style="margin-bottom: 10px;"><strong>Q${idx + 1}:</strong> ${q.question}</div>
+                    <div class="problem-options" style="display:flex; flex-direction:column; gap:8px;">
+                        ${q.options.map(opt => `<button class="btn btn-secondary" style="text-align: left; justify-content: flex-start;" onclick="alert(this.textContent.includes('${String(q.answer).replace(/'/g, "\\'")}') ? '✅ Correct! ${String(q.explanation).replace(/'/g, "\\'")}' : '❌ Incorrect. Try again.')">${opt}</button>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('practice-score-bar').classList.add('hidden'); // Hide static score bar
+        }
+
+    } catch (error) {
+        console.error("AI flow error:", error);
+        
+        // Fallback to local engine completely
+        const thought = engine.addThought(text, currentExam, selectedSubject);
+        const insights = [];
+        const examData = EXAM_SYLLABI[currentExam];
+        const subjectIcon = examData?.subjects[thought.subject]?.icon || '📚';
+        
+        insights.push({
+            label: 'Subject Detected',
+            value: String(thought.subject).charAt(0).toUpperCase() + String(thought.subject).slice(1),
+            icon: subjectIcon
+        });
+
+        if (thought.topics && thought.topics.length > 0) {
+            insights.push({ label: 'Topics Found', value: thought.topics.slice(0, 5).join(', '), icon: '📌' });
+        }
+
+        const confLabels = { 1: 'Very Low', 2: 'Low', 3: 'Moderate', 4: 'High', 5: 'Very High' };
+        const confEmojis = { 1: '😰', 2: '🤔', 3: '🤷', 4: '😊', 5: '💪' };
+        insights.push({
+            label: 'Confidence Level',
+            value: `${confEmojis[thought.confidence]} ${confLabels[thought.confidence]}`,
+            icon: '🎯'
+        });
+
+        if (thought.focusQuality) {
+            insights.push({
+                label: 'Focus Quality',
+                value: `${thought.focusQuality.label} (${thought.focusQuality.score}/100)`,
+                icon: '🔍'
+            });
+        }
+        showQuickInsights(insights);
+        
+        // Load local fallback relevant practice problems if present
+        if (typeof initPracticeProblems === 'function') {
+            initPracticeProblems(currentExam, thought.topics);
+        }
     }
-
-    // Pass raw text, exam, and the manually selected subject from the UI pills.
-    const thought = engine.addThought(text, currentExam, selectedSubject);
-
-    // Show auto-extracted insights
-    const insights = engine.getQuickInsights(thought);
-    showQuickInsights(insights);
 
     // Reset editor
     editor.value = '';
@@ -778,253 +837,12 @@ If rejected: {"status": "rejected", "message": "Your short friendly message here
     updateStreak();
     renderTodaysDumps();
 
-    // Trigger AI Coach response
-    runAICoach(text, thought);
-
-    showToast('🧠', 'Thought stacked! Everything auto-analyzed.');
+    saveBtn.innerHTML = originalBtnHTML;
+    saveBtn.disabled = false;
+    showToast('🧠', 'Thought stacked successfully!');
 }
 
-// ---- AI Coach — Problem-Solving Advice + Motivation ----
 
-async function runAICoach(dumpText, thought) {
-    const container = document.getElementById('ai-coach-response');
-    const thinkingEl = document.getElementById('ai-coach-thinking');
-    const contentEl = document.getElementById('ai-coach-content');
-
-    // Show the coach container with thinking state
-    container.classList.remove('hidden');
-    thinkingEl.classList.remove('hidden');
-    contentEl.classList.add('hidden');
-    contentEl.innerHTML = '';
-
-    const apiKey = localStorage.getItem('thoughtstack_gemini_key');
-
-    if (apiKey) {
-        // --- REAL AI (Gemini) ---
-        try {
-            const subjectName = thought.subject.charAt(0).toUpperCase() + thought.subject.slice(1);
-            const confLabels = { 1: 'Very Low', 2: 'Low', 3: 'Moderate', 4: 'High', 5: 'Very High' };
-            const topicsStr = (thought.topics || []).join(', ') || 'general study';
-            const confusionLevel = thought.sentiment?.confusion || 0;
-            const insightLevel = thought.sentiment?.insight || 0;
-            const habitsStr = (thought.habits || []).map(h => h.label).join(', ') || 'none detected';
-
-            const prompt = `You are a warm, empathetic yet no-nonsense AI study coach for an Indian student preparing for ${currentExam}. The student just finished a brain-dump about their study session. 
-
-Here is their brain dump:
-"${dumpText}"
-
-Context about this dump:
-- Subject: ${subjectName}
-- Topics covered: ${topicsStr}
-- Confidence level: ${confLabels[thought.confidence]} (${thought.confidence}/5)
-- Confusion signals detected: ${confusionLevel}
-- Insight/eureka signals: ${insightLevel}
-- Study habits spotted: ${habitsStr}
-- Focus quality: ${thought.focusQuality?.label || 'Unknown'} (${thought.focusQuality?.score || '?'}/100)
-
-Your job:
-1. **Acknowledge** what they studied and what's going well (be specific to their content)
-2. **Identify the core problem** — if they expressed confusion, frustration, or struggle, pinpoint exactly what seems to be the issue and suggest a concrete approach to solve it (specific techniques, resources, or strategies)
-3. **Give 2-3 actionable next steps** — very specific things they can do RIGHT NOW to improve their understanding
-4. **End with genuine motivation** — not generic "you can do it" but something specific to THEIR situation, their progress, their exam
-
-Rules:
-- Be direct and specific, not generic
-- Use bolding for key points
-- Keep it concise (under 200 words)
-- Sound like a supportive senior who's been through this exam, not a robot
-- If they seem to be doing well, celebrate that and push them to go deeper
-- If they seem confused, be reassuring but honest about the work needed`;
-
-            const payload = {
-                contents: [{
-                    parts: [{ text: prompt }]
-                }]
-            };
-
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-
-            const data = await response.json();
-            const llmResponse = data.candidates[0].content.parts[0].text;
-
-            // Parse markdown to HTML
-            const htmlFormatted = llmResponse
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/\n\n/g, '<br><br>')
-                .replace(/\n/g, '<br>');
-
-            thinkingEl.classList.add('hidden');
-            contentEl.innerHTML = `<div class="ai-raw-response">${htmlFormatted}</div>`;
-            contentEl.classList.remove('hidden');
-            contentEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-            // Load relevant practice problems
-            initPracticeProblems(currentExam, thought.topics);
-
-        } catch (err) {
-            console.error('AI Coach (Gemini) failed:', err);
-            // Fallback to mock engine
-            generateMockCoachResponse(dumpText, thought, thinkingEl, contentEl);
-        }
-
-    } else {
-        // --- MOCK ENGINE (No API Key) ---
-        // Simulate a brief delay for realism
-        setTimeout(() => {
-            generateMockCoachResponse(dumpText, thought, thinkingEl, contentEl);
-        }, 2000);
-    }
-}
-
-function generateMockCoachResponse(dumpText, thought, thinkingEl, contentEl) {
-    const subjectName = thought.subject.charAt(0).toUpperCase() + thought.subject.slice(1);
-    const confidence = thought.confidence;
-    const confusion = thought.sentiment?.confusion || 0;
-    const insightCount = thought.sentiment?.insight || 0;
-    const topics = thought.topics || [];
-    const habits = thought.habits || [];
-    const focusScore = thought.focusQuality?.score || 50;
-    const wordCount = thought.wordCount || dumpText.split(/\s+/).length;
-
-    let acknowledgeHtml = '';
-    let problemHtml = '';
-    let stepsHtml = '';
-    let motivationText = '';
-
-    // ---- 1. Acknowledge what went well ----
-    if (confidence >= 4 && insightCount > 0) {
-        acknowledgeHtml = `<p>Really solid session on <strong>${subjectName}</strong>! You're clearly building real understanding, not just surface-level reading. ${topics.length > 0 ? `Your grasp of <strong>${topics.slice(0, 2).join('</strong> and <strong>')}</strong> is getting sharper.` : ''}</p>`;
-    } else if (confidence >= 3) {
-        acknowledgeHtml = `<p>Good effort on <strong>${subjectName}</strong> today. ${topics.length > 0 ? `You covered ${topics.slice(0, 3).join(', ')} — that takes focus.` : 'You showed up and put in the work — that matters.'}</p>`;
-    } else {
-        acknowledgeHtml = `<p>Hey, the fact that you sat down and studied <strong>${subjectName}</strong> today already puts you ahead of most. ${wordCount > 100 ? 'And you wrote a detailed dump — that shows you\'re taking this seriously.' : 'Every session counts, even the rough ones.'}</p>`;
-    }
-
-    // ---- 2. Identify the core problem ----
-    if (confusion > 0 && confidence <= 2) {
-        const confusedTopics = topics.length > 0 ? topics.slice(0, 2).join(' and ') : subjectName;
-        problemHtml = `
-            <div class="coach-section">
-                <div class="coach-section-title">🔍 What I noticed</div>
-                <div class="coach-section-body">
-                    <p>You're hitting a wall with <strong>${confusedTopics}</strong> — and that's completely normal. Most toppers have been exactly where you are right now. The confusion isn't a sign of weakness, it's your brain wrestling with something new.</p>
-                    <p>Here's the thing: <strong>confusion that you recognize is halfway to clarity.</strong> The students who fail are the ones who don't even notice they're confused.</p>
-                </div>
-            </div>`;
-    } else if (confusion > 0) {
-        problemHtml = `
-            <div class="coach-section">
-                <div class="coach-section-title">🔍 What I noticed</div>
-                <div class="coach-section-body">
-                    <p>There are some foggy areas in your understanding — that's normal when you're pushing into deeper territory. The key is not to leave these gaps unresolved.</p>
-                </div>
-            </div>`;
-    } else if (focusScore < 40) {
-        problemHtml = `
-            <div class="coach-section">
-                <div class="coach-section-title">🔍 What I noticed</div>
-                <div class="coach-section-body">
-                    <p>Your focus seemed a bit scattered this session. That's okay — we all have off days. But let's make sure this doesn't become a pattern. Try shorter, more intense study blocks next time.</p>
-                </div>
-            </div>`;
-    }
-
-    // ---- 3. Actionable next steps ----
-    const steps = [];
-
-    if (confusion > 0) {
-        steps.push(`<strong>Isolate the confusion</strong> — Open a blank page and write down exactly what you don't understand about ${topics[0] || subjectName}. Be as specific as possible. "I don't get it" becomes "I don't understand why X leads to Y."`);
-        steps.push(`<strong>Watch one targeted explanation</strong> — Find a 10-min video specifically on the concept that's confusing you. Sometimes a different perspective is all you need.`);
-    }
-
-    if (confidence <= 3) {
-        steps.push(`<strong>Do 3 practice problems</strong> — Not easy ones. Pick problems that are slightly above your comfort level on ${topics[0] || subjectName}. Struggle is where learning happens.`);
-    }
-
-    if (habits.some(h => h.label === 'passive reading')) {
-        steps.push(`<strong>Switch from reading to doing</strong> — You mentioned reading/going through notes. Try active recall instead: close the book and write down everything you remember. Then check what you missed.`);
-    }
-
-    if (habits.some(h => h.label === 'pressure/stress' || h.label === 'burnt out')) {
-        steps.push(`<strong>Take care of yourself</strong> — I can sense the pressure. Take a 20-minute walk or rest before your next session. A fresh mind solves 2x faster than a tired one.`);
-    }
-
-    if (confidence >= 4 && insightCount > 0) {
-        steps.push(`<strong>Teach it to someone</strong> — You seem to have a solid grasp. Explain what you learned to a friend or even to yourself out loud. If you can teach it, you truly own it.`);
-        steps.push(`<strong>Attempt PYQs on this topic</strong> — Test your understanding against actual previous year questions. This is where theory meets reality.`);
-    }
-
-    if (focusScore >= 70) {
-        steps.push(`<strong>Ride this momentum</strong> — Your focus was strong today. Schedule another session at the same time tomorrow to build a streak. Consistency beats intensity.`);
-    }
-
-    // Fallback if no steps generated
-    if (steps.length === 0) {
-        steps.push(`<strong>Review today's topics tomorrow</strong> — Space repetition is your secret weapon. Revisit ${topics[0] || subjectName} after 24 hours and see how much you retain.`);
-        steps.push(`<strong>Connect the dots</strong> — Try linking what you studied today with something you learned last week. Cross-topic connections make knowledge stick.`);
-    }
-
-    stepsHtml = steps.slice(0, 3).map(step => `<div class="coach-step">${step}</div>`).join('');
-
-    // ---- 4. Motivation ----
-    const motivations = {
-        highConfidence: [
-            `You're building real momentum. This is what separates the ones who clear ${currentExam} from the ones who just "prepare." Keep stacking.`,
-            `${currentExam} rewards consistent thinkers, not last-minute crammers. You're doing exactly the right thing. Keep this up.`,
-            `Every dump you write is proof that you're not just studying — you're thinking. That's the difference maker.`
-        ],
-        lowConfidence: [
-            `Listen — every topper who cleared ${currentExam} has sat exactly where you're sitting right now, feeling exactly what you're feeling. The only difference? They didn't stop. Neither will you.`,
-            `Confusion today is clarity tomorrow. The fact that you recognized what you don't know is already half the battle. You've got this.`,
-            `${currentExam} is hard. It's supposed to be. But you're here, putting in the work, being honest about your gaps. That takes more courage than most people have.`
-        ],
-        moderate: [
-            `Steady progress is still progress. You're one session closer to where you need to be. Don't underestimate the power of showing up consistently.`,
-            `You studied, you reflected, you identified what needs work. That's the loop that leads to results. Keep going — you're closer than you think.`,
-            `The students who crack ${currentExam} aren't the ones who never struggled. They're the ones who kept showing up after the struggle. Just like you did today.`
-        ]
-    };
-
-    let motivationPool;
-    if (confidence >= 4) motivationPool = motivations.highConfidence;
-    else if (confidence <= 2) motivationPool = motivations.lowConfidence;
-    else motivationPool = motivations.moderate;
-
-    motivationText = motivationPool[Math.floor(Math.random() * motivationPool.length)];
-
-    // ---- Assemble final HTML ----
-    const finalHtml = `
-        <div class="coach-section">
-            <div class="coach-section-title">✨ Recognition</div>
-            <div class="coach-section-body">${acknowledgeHtml}</div>
-        </div>
-        ${problemHtml}
-        <div class="coach-section">
-            <div class="coach-section-title">🛠️ Your Next Moves</div>
-            <div class="coach-section-body">${stepsHtml}</div>
-        </div>
-        <div class="coach-motivation">${motivationText}</div>
-    `;
-
-    thinkingEl.classList.add('hidden');
-    contentEl.innerHTML = finalHtml;
-    contentEl.classList.remove('hidden');
-
-    setTimeout(() => {
-        contentEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
-
-    // Load relevant practice problems
-    initPracticeProblems(currentExam, thought.topics);
-}
 
 // ---- Practice Problems Management ----
 
@@ -2020,183 +1838,7 @@ function handleUpgrade() {
 
 // ---- Decision Clarifier ----
 
-function initDecisionClarifier() {
-    const textarea = document.getElementById('dc-textarea');
-    const wordCount = document.getElementById('dc-word-count');
-    if (!textarea) return;
-
-    textarea.addEventListener('input', () => {
-        const words = textarea.value.trim().split(/\s+/).filter(Boolean).length;
-        wordCount.textContent = `${words} word${words !== 1 ? 's' : ''}`;
-    });
-    
-    // Pre-fill API key input if it exists
-    const existingKey = localStorage.getItem('thoughtstack_gemini_key');
-    if(existingKey) {
-        const input = document.getElementById('dc-gemini-key');
-        if(input) input.value = existingKey;
-    }
-}
-
-function saveGeminiKey() {
-    const key = document.getElementById('dc-gemini-key').value.trim();
-    if(key) {
-        localStorage.setItem('thoughtstack_gemini_key', key);
-        showToast('🔑', 'API Key saved securely to your browser.');
-        document.getElementById('dc-api-settings').classList.add('hidden');
-    } else {
-        localStorage.removeItem('thoughtstack_gemini_key');
-        showToast('ℹ️', 'API Key removed. Reverting to mock-engine.');
-    }
-}
-
-async function runDecisionClarifier() {
-    if (!window.currentUser) {
-        showToast('🔒', 'Please log in to use the Decision Clarifier.');
-        openAuthModal();
-        return;
-    }
-
-    if (!tierManager.canAccess('decision_clarifier')) {
-        openUpgradeModal('decision_clarifier');
-        return;
-    }
-
-    const textarea = document.getElementById('dc-textarea');
-    const text = textarea.value.trim();
-
-    if (text.split(/\s+/).length < 10) {
-        showToast('✍️', 'Write at least 10 words about your decision. The more context, the sharper the questions.');
-        return;
-    }
-
-    const apiKey = localStorage.getItem('thoughtstack_gemini_key');
-    const thinkingState = document.getElementById('dc-thinking');
-    const resultState = document.getElementById('dc-results');
-    const aiResultState = document.getElementById('dc-ai-results');
-    const btn = document.getElementById('dc-clarify-btn');
-
-    // UI Prep
-    thinkingState.classList.remove('hidden');
-    resultState.classList.add('hidden');
-    aiResultState.classList.add('hidden');
-    btn.disabled = true;
-    btn.textContent = 'Processing...';
-    
-    // Smooth scroll to orb
-    thinkingState.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-    if (!apiKey) {
-        // MOCK ENGINE
-        setTimeout(() => {
-            const result = DecisionClarifier.clarify(text); // from engine.js
-            renderDecisionResult(result, text);
-            thinkingState.classList.add('hidden');
-            btn.disabled = false;
-            btn.textContent = '🔮 Clarify My Thinking';
-        }, 3000); // 3-second simulated processing delay
-        return;
-    }
-
-    // REAL LLM ENGINE (Gemini)
-    try {
-        const payload = {
-            contents: [{
-                parts: [{
-                    text: `You are a world-class strategic advisor and cognitive coach. Analyze the following decision a student is wrestling with. Provide a short, hard-hitting analysis. Identify the core conflict. Then, ask 3 sharp, incisive questions designed to break their mental loop and force clarity. Format nicely with bolding and spacing.\n\nThe student's dilemma:\n"${text}"`
-                }]
-            }]
-        };
-
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const llmResponse = data.candidates[0].content.parts[0].text;
-        
-        // Simple Markdown parsing
-        const htmlFormatted = llmResponse
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
-
-        thinkingState.classList.add('hidden');
-        aiResultState.innerHTML = htmlFormatted;
-        aiResultState.classList.remove('hidden');
-        aiResultState.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-    } catch (err) {
-        console.error("Gemini AI failed:", err);
-        showToast('❌', 'AI Request failed. Check your API key or connection.');
-        thinkingState.classList.add('hidden');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '🔮 Clarify My Thinking';
-    }
-}
-
-function renderDecisionResult(result, originalText) {
-    const container = document.getElementById('dc-results');
-    container.classList.remove('hidden');
-
-    container.innerHTML = `
-        <div class="dc-result-header">
-            <span class="dc-result-type-badge">${result.typeName}</span>
-            <span class="dc-result-meta">${result.meta.wordCount} words analyzed</span>
-        </div>
-        <div class="dc-result-intro">
-            <p>You\'re wrestling with a <strong>${result.typeName.toLowerCase()}</strong> decision.${result.meta.hasConflict ? ' I can see the conflict in your words.' : ''} ${result.meta.hasUrgency ? 'I sense urgency \u2014 but fast decisions aren\'t always good ones.' : 'Take your time with this.'}</p>
-        </div>
-        <h4 class="dc-questions-title">3 Questions to Sharpen Your Thinking</h4>
-        <div class="dc-questions">
-            ${result.questions.map((q, i) => `
-                <div class="dc-question" style="animation-delay: ${(i + 1) * 0.2}s">
-                    <span class="dc-question-num">${i + 1}</span>
-                    <p>${q}</p>
-                </div>
-            `).join('')}
-        </div>
-        <div class="dc-result-footer">
-            <p>Sit with these questions. Don\'t answer them instantly. The best decisions happen when you sleep on the right question.</p>
-        </div>
-    `;
-
-    // Scroll to results
-    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-// ---- Toast ----
-
-function showToast(icon, message) {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.classList.add('toast-out');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-// ---- Utility ----
-
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-}
+// Removed AI Tutor, Decision Clarifier AI, and Gemini API logic.
 
 // Make functions globally available
 window.switchView = switchView;
@@ -2207,7 +1849,6 @@ window.closeWeeklyReview = closeWeeklyReview;
 window.openUpgradeModal = openUpgradeModal;
 window.closeUpgradeModal = closeUpgradeModal;
 window.handleUpgrade = handleUpgrade;
-window.runDecisionClarifier = runDecisionClarifier;
 window.handleGoogleSignIn = handleGoogleSignIn;
 window.openAuthModal = openAuthModal;
 window.closeAuthModal = closeAuthModal;
@@ -2222,4 +1863,120 @@ window.updateAccountName = updateAccountName;
 window.sendAccountPasswordReset = sendAccountPasswordReset;
 window.deleteUserAccount = deleteUserAccount;
 window.completeOnboarding = completeOnboarding;
-window.saveGeminiKey = saveGeminiKey;
+
+// ===========================
+// AI Tutor Chat Controller
+// ===========================
+
+let tutorChatHistory = []; // Local history state
+
+function initTutorChat() {
+    const input = document.getElementById('tutor-input');
+    const sendBtn = document.getElementById('tutor-send-btn');
+
+    if (sendBtn) {
+        sendBtn.addEventListener('click', sendTutorMessage);
+    }
+
+    if (input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendTutorMessage();
+            }
+        });
+
+        // Auto-expand textarea
+        input.addEventListener('input', () => {
+            input.style.height = 'auto';
+            input.style.height = input.scrollHeight + 'px';
+        });
+    }
+}
+
+async function sendTutorMessage() {
+    const input = document.getElementById('tutor-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    // Reset input
+    input.value = '';
+    input.style.height = 'auto';
+
+    // Update history and UI
+    const userMessage = { role: 'user', content: text };
+    tutorChatHistory.push(userMessage);
+    renderTutorMessage('user', text);
+
+    // Show typing indicator
+    const chatArea = document.getElementById('tutor-chat-area');
+    const typingIndicator = document.createElement('div');
+    typingIndicator.className = 'tutor-typing';
+    typingIndicator.id = 'tutor-typing-indicator';
+    typingIndicator.innerHTML = `
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+    `;
+    chatArea.appendChild(typingIndicator);
+    chatArea.scrollTop = chatArea.scrollHeight;
+
+    try {
+        const projectId = import.meta.env ? import.meta.env.VITE_FIREBASE_PROJECT_ID : 'your-project-id';
+        const functionUrl = `https://us-central1-${projectId}.cloudfunctions.net/tutorChat`;
+
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: tutorChatHistory })
+        });
+
+        if (!response.ok) throw new Error('Tutor API error');
+        const data = await response.json();
+
+        // Remove indicator
+        const indicator = document.getElementById('tutor-typing-indicator');
+        if (indicator) indicator.remove();
+
+        // Update history and UI
+        const aiMessage = { role: 'assistant', content: data.reply };
+        tutorChatHistory.push(aiMessage);
+        renderTutorMessage('ai', data.reply);
+
+    } catch (error) {
+        console.error("Tutor error:", error);
+        const indicator = document.getElementById('tutor-typing-indicator');
+        if (indicator) indicator.remove();
+        showToast('⚠️', 'The AI Tutor is temporarily offline. Please try again later.');
+    }
+}
+
+function renderTutorMessage(role, text) {
+    const chatArea = document.getElementById('tutor-chat-area');
+    
+    // Remove welcome screen if present
+    const welcome = chatArea.querySelector('.tutor-welcome');
+    if (welcome) welcome.remove();
+
+    const messageEl = document.createElement('div');
+    messageEl.className = `tutor-message ${role}`;
+    messageEl.textContent = text;
+    chatArea.appendChild(messageEl);
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function redirectToTutor(initialQuestion) {
+    switchView('tutor');
+    if (initialQuestion) {
+        const input = document.getElementById('tutor-input');
+        if (input) {
+            input.value = initialQuestion;
+            sendTutorMessage();
+        }
+    }
+}
+
+// Make globally accessible
+window.initTutorChat = initTutorChat;
+window.sendTutorMessage = sendTutorMessage;
+window.redirectToTutor = redirectToTutor;
