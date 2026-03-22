@@ -687,6 +687,16 @@ async function saveDump() {
     // Hide previous message
     if (msgContainer) msgContainer.classList.add('hidden');
 
+    // Make sure we have a subject if it's suspiciously short or a question
+    if (!selectedSubject && text.includes('?') && text.split(' ').length < 20) {
+        if (msgText) msgText.textContent = "ThoughtStack is for reflecting on your studies, not answering generic questions! If this IS a reflection, please select a subject pill above first.";
+        if (msgContainer) msgContainer.classList.remove('hidden');
+        saveBtn.innerHTML = originalBtnHTML;
+        saveBtn.style.opacity = '1';
+        saveBtn.disabled = false;
+        return;
+    }
+
     const apiKey = localStorage.getItem('thoughtstack_gemini_key');
     if (apiKey) {
         saveBtn.innerHTML = `<span>Validating...</span>`;
@@ -718,7 +728,10 @@ If rejected: {"status": "rejected", "message": "Your short friendly message here
 
             const data = await response.json();
             const llmResponse = data.candidates[0].content.parts[0].text;
-            const result = JSON.parse(llmResponse);
+            
+            // Clean markdown backticks to prevent JSON.parse crashes
+            const cleanJson = llmResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const result = JSON.parse(cleanJson);
 
             if (result.status === 'rejected') {
                 if (msgText) msgText.textContent = result.message || "Please write a personal reflection about your study session, not a generic question.";
@@ -732,6 +745,16 @@ If rejected: {"status": "rejected", "message": "Your short friendly message here
             }
         } catch (err) {
             console.error('Validation failed, proceeding anyway:', err);
+            // If the user doesn't write a reflection, the AI coach will just say it looks like physics
+            // if we blindly proceed. We should at least warn if it's too suspiciously short or a question.
+            if (text.includes('?')) {
+                if (msgText) msgText.textContent = "It looks like you're asking a question. ThoughtStack works best when you write a personal reflection about what you studied!";
+                if (msgContainer) msgContainer.classList.remove('hidden');
+                saveBtn.innerHTML = originalBtnHTML;
+                saveBtn.style.opacity = '1';
+                saveBtn.disabled = false;
+                return;
+            }
         }
         
         // Restore button state
@@ -740,8 +763,8 @@ If rejected: {"status": "rejected", "message": "Your short friendly message here
         saveBtn.disabled = false;
     }
 
-    // Just send raw text + exam. Engine auto-extracts everything.
-    const thought = engine.addThought(text, currentExam);
+    // Pass raw text, exam, and the manually selected subject from the UI pills.
+    const thought = engine.addThought(text, currentExam, selectedSubject);
 
     // Show auto-extracted insights
     const insights = engine.getQuickInsights(thought);

@@ -63,8 +63,8 @@ class ThoughtEngine {
         }
     }
 
-    // Accept just raw text + exam. Everything else is auto-extracted.
-    addThought(rawText, exam) {
+    // Accept raw text + exam + manual subject.
+    addThought(rawText, exam, manualSubject = null) {
         const text = rawText.trim();
         const wordCount = text.split(/\s+/).filter(Boolean).length;
         const now = new Date();
@@ -77,8 +77,8 @@ class ThoughtEngine {
             date: now.toISOString(),
             dayKey: this.getDayKey(now),
             wordCount,
-            // All auto-extracted
-            subject: this.detectSubject(text, exam),
+            // All auto-extracted or manual
+            subject: this.detectSubject(text, exam, manualSubject),
             confidence: this.detectConfidence(text),
             focusQuality: this.detectFocusQuality(text),
             habits: this.detectHabits(text),
@@ -118,7 +118,15 @@ class ThoughtEngine {
 
     // ---- Auto-Detection: Subject ----
 
-    detectSubject(text, exam) {
+    detectSubject(text, exam, manualSubject = null) {
+        if (manualSubject) {
+            // Verify manual subject belongs to the exam syllabus
+            const syllabus = EXAM_SYLLABI[exam];
+            if (syllabus && syllabus.subjects[manualSubject]) {
+                return manualSubject;
+            }
+        }
+
         const lower = text.toLowerCase();
         const scores = { physics: 0, chemistry: 0, mathematics: 0, biology: 0, general: 0 };
 
