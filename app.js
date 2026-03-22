@@ -1980,3 +1980,43 @@ function redirectToTutor(initialQuestion) {
 window.initTutorChat = initTutorChat;
 window.sendTutorMessage = sendTutorMessage;
 window.redirectToTutor = redirectToTutor;
+
+// Navigation & View
+window.switchView = switchView;
+window.openWeeklyReview = openWeeklyReview;
+window.closeWeeklyReview = closeWeeklyReview;
+window.openUpgradeModal = openUpgradeModal;
+window.closeUpgradeModal = closeUpgradeModal;
+window.handleUpgrade = handleUpgrade;
+
+// Practice
+window.selectOption = selectOption;
+window.retryPracticeProblems = retryPracticeProblems;
+window.filterPracticeProblems = filterPracticeProblems;
+
+// Auth
+window.openAuthModal = openAuthModal;
+window.closeAuthModal = closeAuthModal;
+window.switchAuthTab = switchAuthTab;
+window.handleAuthSubmit = handleAuthSubmit;
+window.handleGoogleSignIn = handleGoogleSignIn;
+window.handleSignOut = handleSignOut;
+window.resendVerification = resendVerification;
+window.verifyAndReload = verifyAndReload;
+
+// Account & Profile
+window.openAccountModal = openAccountModal;
+window.closeAccountModal = closeAccountModal;
+window.updateAccountName = updateAccountName;
+window.sendAccountPasswordReset = sendAccountPasswordReset;
+window.deleteUserAccount = deleteUserAccount;
+window.completeOnboarding = completeOnboarding;
+
+// Ensure loader is hidden eventually
+window.addEventListener('load', () => {
+    const loader = document.getElementById('app-loading-overlay');
+    if (loader && !loader.classList.contains('hidden')) {
+        // Only hide if Firebase initialization didn't already handle it (after a timeout)
+        setTimeout(() => loader.classList.add('hidden'), 2000);
+    }
+});
